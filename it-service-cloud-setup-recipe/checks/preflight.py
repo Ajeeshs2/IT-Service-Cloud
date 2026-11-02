@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS Pre-flight audit (run FIRST, every run) - READ-ONLY. Changes nothing in the org.
+"""IT Service Cloud Pre-flight audit (run FIRST, every run) - READ-ONLY. Changes nothing in the org.
 Usage: python3 checks/preflight.py <org-alias> [--portal-site "<name>"]
 Builds a SKIP MAP: every recipe phase with its current state on the connected org and the suggested action, so the
 user can choose which phases to run. Availability-driven (RC-44): features/objects not in the org are reported, never
@@ -17,9 +17,9 @@ OUTDIR = os.path.join(HERE, "preflight-out"); os.makedirs(OUTDIR, exist_ok=True)
 TS = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 # shared read-only settings cache for this pre-flight run (status mode only; deploy/plan always retrieve fresh)
 import tempfile
-os.environ["AITS_SETTINGS_CACHE"] = tempfile.mkdtemp(prefix="aits-preflight-")
+os.environ["IT_SERVICE_CLOUD_SETTINGS_CACHE"] = tempfile.mkdtemp(prefix="it-service-cloud-preflight-")
 import atexit, shutil as _sh
-atexit.register(lambda: _sh.rmtree(os.environ.get("AITS_SETTINGS_CACHE", ""), ignore_errors=True))
+atexit.register(lambda: _sh.rmtree(os.environ.get("IT_SERVICE_CLOUD_SETTINGS_CACHE", ""), ignore_errors=True))
 
 def run(args, timeout=900):
     p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -62,7 +62,7 @@ except Exception: st = {}
 spec_opt = {}
 try:
     import xml.etree.ElementTree as ET
-    sp = ET.parse(os.path.join(ROOT, "settings", "aits-itsm-settings.xml")).getroot()
+    sp = ET.parse(os.path.join(ROOT, "settings", "it-service-cloud-settings.xml")).getroot()
     spec_opt = {f.get("id"): f.attrib for g in sp.findall("features") for f in g}
 except Exception: pass
 for fid, v in st.items():
@@ -87,7 +87,7 @@ if perm_feats:
 
 # --- sharing (read-only EntityDefinition vs spec; ControlledByParent rows need a retrieve to confirm) --------------
 try:
-    sh = ET.parse(os.path.join(ROOT, "sharing", "aits-step0-sharing.xml")).getroot()
+    sh = ET.parse(os.path.join(ROOT, "sharing", "it-service-cloud-sharing.xml")).getroot()
     tg = [t.attrib for t in sh.find("targets")]
     ed = q("SELECT QualifiedApiName, InternalSharingModel, ExternalSharingModel FROM EntityDefinition WHERE QualifiedApiName IN (" + ",".join(f"'{t['object']}'" for t in tg) + ")")
     cur = {r["QualifiedApiName"]: (r["InternalSharingModel"], r["ExternalSharingModel"]) for r in (ed or {}).get("records", [])}
@@ -130,7 +130,7 @@ row("9", "Data Cloud (runs LAST) + Data Library", "ON" if dcv else ("OFF" if dcv
 
 # --- output -----------------------------------------------------------------------------------------------------------
 order = lambda r: (r["phase"] not in ("0",), r["phase"])
-lines = [f"# AITS Pre-flight audit — {TS}", "", header, f"Deploy queue: {queue_note}", "",
+lines = [f"# IT Service Cloud Pre-flight audit — {TS}", "", header, f"Deploy queue: {queue_note}", "",
          "| Phase | Feature | State on this org | Suggested action |", "|---|---|---|---|"]
 lines += [f"| {r['phase']} | {r['feature']} | {r['state']} | {r['action']} |" for r in skip]
 lines += ["", "Read-only: nothing was changed. Choose the phases to run; each runs plan → user approval → deploy --confirm → verify."]

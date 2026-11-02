@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AITS Org Setup Recipe — Step 0: Organization-Wide Sharing Defaults (programmatic)
+  IT Service Cloud Setup Recipe — Step 0: Organization-Wide Sharing Defaults (programmatic)
   Process definition consumed by apply_owd.py. Bundle with the recipe.
   Values use Metadata API enums: ReadWrite | Read | Private | ControlledByParent
   Method: retrieve CustomObject -> patch ONLY sharingModel/externalSharingModel in *.object-meta.xml
           -> deploy object-meta.xml files only (no child fields) -> verify via EntityDefinition.
 -->
-<SharingProcess name="AITS_Step0_OWD" apiVersion="67.0" recipeStep="Step 0">
+<SharingProcess name="IT_Service_Cloud_Step0_OWD" apiVersion="67.0" recipeStep="Step 0">
     <guardrails>
         <rule>Only objects listed under targets are changed. All other object settings are preserved from the retrieved file.</rule>
         <rule>Availability-driven: every target is checked against the connected org. Objects not in the org are skipped and reported, never treated as a failure (applies to all rows, not only skipIfAbsent).</rule>

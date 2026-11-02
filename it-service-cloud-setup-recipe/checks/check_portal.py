@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS Self-service portal checks (phase 8) - READ-ONLY. Changes nothing.
+"""IT Service Cloud Self-service portal checks (phase 8) - READ-ONLY. Changes nothing.
 Usage: python3 checks/check_portal.py <org-alias> [--site "<site name>"] [--json out.json]
 8a Self Service Portal ON : no queryable setting -> confirm on the Salesforce Go page (Level 2, read-only):
                             /lightning/setup/page/feature/service-cloud-itsm-self-service-portal/home?topic=SalesforceGo

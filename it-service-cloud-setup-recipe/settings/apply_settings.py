@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply AITS feature settings (IT Service Core 1a-1d, Agentforce 3a-3e) from aits-itsm-settings.xml (bundle with the recipe).
+"""Apply IT Service Cloud feature settings (IT Service Core 1a-1d, Agentforce 3a-3e) from it-service-cloud-settings.xml (bundle with the recipe).
 FEATURE-driven: the user picks features (phases); only flags tagged with a selected feature change.
 Self-contained: uses its own SFDX work project at settings/_work/ (never touches your project's source).
   python3 settings/apply_settings.py <org-alias> status                          # phases + current state (read-only)
@@ -41,7 +41,7 @@ import signal
 def _stop(sig, frm):
     STOP["flag"] = True; print(f"\nsignal {sig}: finishing current deploy poll, then stopping (no new deploys)")
 signal.signal(signal.SIGINT, _stop); signal.signal(signal.SIGTERM, _stop)
-SPEC = ET.parse(os.path.join(HERE, "aits-itsm-settings.xml")).getroot()
+SPEC = ET.parse(os.path.join(HERE, "it-service-cloud-settings.xml")).getroot()
 API = SPEC.get("apiVersion", "67.0")
 SETTINGS = [s for s in SPEC.findall("setting") if not ONLY or s.get("name") == ONLY]
 FEATURES = [dict(f.attrib, group=g.get("group", "")) for g in SPEC.findall("features") for f in g]
@@ -71,7 +71,7 @@ def ensure_work():
     os.makedirs(os.path.join(WORK, "force-app"), exist_ok=True)
     pj = os.path.join(WORK, "sfdx-project.json")
     if not os.path.exists(pj):
-        json.dump({"packageDirectories": [{"path": "force-app", "default": True}], "name": "aits-settings-work", "sourceApiVersion": API}, open(pj, "w"))
+        json.dump({"packageDirectories": [{"path": "force-app", "default": True}], "name": "it-service-cloud-settings-work", "sourceApiVersion": API}, open(pj, "w"))
 
 def sf(args):
     ensure_work()
@@ -86,7 +86,7 @@ def prefetch_all():
     """One retrieve for every spec'd settings file (much faster than one retrieve per file)."""
     names = [st.get("name") for st in SPEC.findall("setting") if st.get("name") not in _CACHE]
     if not names: return
-    ro = os.environ.get("AITS_SETTINGS_CACHE")   # read-only shared cache (pre-flight); only honoured in status mode
+    ro = os.environ.get("IT_SERVICE_CLOUD_SETTINGS_CACHE")   # read-only shared cache (pre-flight); only honoured in status mode
     if ro and MODE == "status" and all(os.path.exists(os.path.join(ro, f"{n}.settings-meta.xml")) for n in names):
         for n in names: _CACHE[n] = open(os.path.join(ro, f"{n}.settings-meta.xml")).read()
         return

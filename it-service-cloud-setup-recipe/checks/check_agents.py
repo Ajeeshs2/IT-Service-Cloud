@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS Agentforce agent checks (phases 3a-3c) - READ-ONLY. Reports PASS / FAIL / N/A with a fix hint; changes nothing.
+"""IT Service Cloud Agentforce agent checks (phases 3a-3c) - READ-ONLY. Reports PASS / FAIL / N/A with a fix hint; changes nothing.
 Usage: python3 checks/check_agents.py <org-alias> [--features platform,fulfiller,employee] [--json out.json]
 Agents are DISCOVERED, never hard-coded (RC-9):
   - Fulfiller = BotDefinition whose AgentTemplate ends with 'ITSrvcMgmtFulfiller' (any DeveloperName).

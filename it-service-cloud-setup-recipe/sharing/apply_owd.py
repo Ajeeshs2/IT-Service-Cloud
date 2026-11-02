@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply AITS Step 0 OWD from aits-step0-sharing.xml (bundle with the recipe).
+"""Apply IT Service Cloud Step 0 OWD from it-service-cloud-sharing.xml (bundle with the recipe).
 Self-contained: creates and uses its own SFDX work project at sharing/_work/ (never touches your project's source).
   python3 sharing/apply_owd.py <org-alias> plan              # snapshot + fresh retrieve + patch + report (no org change)
   python3 sharing/apply_owd.py <org-alias> deploy [--confirm] # Level 1 programmatic deploy; failed rows -> browser-fallback.md (exit 2)
@@ -13,7 +13,7 @@ import json, re, subprocess, sys, time, os, shutil, xml.etree.ElementTree as ET
 HERE = os.path.dirname(os.path.abspath(__file__))
 if len(sys.argv) < 3: sys.exit(__doc__)
 ORG, MODE, CONFIRM = sys.argv[1], sys.argv[2], "--confirm" in sys.argv
-SPEC = ET.parse(os.path.join(HERE, "aits-step0-sharing.xml")).getroot()
+SPEC = ET.parse(os.path.join(HERE, "it-service-cloud-sharing.xml")).getroot()
 TARGETS = [t.attrib for t in SPEC.find("targets")]
 INHERITED = [o.get("name") for inh in SPEC.findall("inherited") for o in inh]
 WORK = os.path.join(HERE, "_work")                      # script-owned SFDX project; only this folder is ever deleted from
@@ -27,7 +27,7 @@ def ensure_work():
     os.makedirs(os.path.join(WORK, "force-app"), exist_ok=True)
     pj = os.path.join(WORK, "sfdx-project.json")
     if not os.path.exists(pj):
-        json.dump({"packageDirectories": [{"path": "force-app", "default": True}], "name": "aits-owd-work",
+        json.dump({"packageDirectories": [{"path": "force-app", "default": True}], "name": "it-service-cloud-owd-work",
                    "sourceApiVersion": SPEC.get("apiVersion", "67.0")}, open(pj, "w"))
 
 def sf(args):
@@ -157,7 +157,7 @@ def deploy():
     """Level 1 = programmatic. Failures are isolated and handed to Level 2 (browser) - the run does not stop."""
     st = json.load(open(STATE)); todo = list(st["todo"])
     if st["reductions"] and not CONFIRM: die("plan has access reductions; re-run with --confirm after user approval")
-    if st["blocked"]: die("plan has invalid spec rows (External more permissive than Internal): " + str(st["blocked"]) + " - fix aits-step0-sharing.xml; the UI cannot apply them either")
+    if st["blocked"]: die("plan has invalid spec rows (External more permissive than Internal): " + str(st["blocked"]) + " - fix it-service-cloud-sharing.xml; the UI cannot apply them either")
     fallback = {}
     remaining = todo
     for attempt in range(3):  # atomic deploy: drop failed objects and redeploy the rest

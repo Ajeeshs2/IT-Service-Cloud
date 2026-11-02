@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS CMDB & Service Graph checks (phase 11) - READ-ONLY. Changes nothing.
+"""IT Service Cloud CMDB & Service Graph checks (phase 11) - READ-ONLY. Changes nothing.
 Usage: python3 checks/check_cmdb.py <org-alias> [--json out.json]
 11a Objects + permissions : ConfigurationItem (+ Incident/Problem link objects) queryable; CMDB permission sets
                             (ItSrvcCnfgItm*PermissionSet) assigned to the connected user. Missing objects = CMDB not provisioned.

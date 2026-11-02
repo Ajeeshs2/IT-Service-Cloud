@@ -1,10 +1,10 @@
-# AITS Org Setup Recipe
+# IT Service Cloud Setup Recipe v2
 
-**Recipe version 2.0 — 2026-11-02** — successor to the "IT Service Cloud Setup Recipe" (version 1), which remains available unchanged.
+**Recipe version 2.1 — 2026-11-02** — successor to the "IT Service Cloud Setup Recipe" (version 1), which remains available unchanged.
 
-**Bundle (scripts and specs):** public GitHub repository `https://github.com/Ajeeshs2/IT-Service-Cloud`, folder `aits-org-setup-recipe/`, tag `v2.0`. Before running, get the bundle: `git clone --branch v2.0 https://github.com/Ajeeshs2/IT-Service-Cloud.git && cd IT-Service-Cloud/aits-org-setup-recipe` — all commands in this recipe run from that folder (keep the checks/, settings/, sharing/ layout). Version 1 is also tag `v1.0`.
+**Bundle (scripts and specs):** public GitHub repository `https://github.com/Ajeeshs2/IT-Service-Cloud`, folder `it-service-cloud-setup-recipe/`, tag `v2.1`. Before running, get the bundle: `git clone --branch v2.1 https://github.com/Ajeeshs2/IT-Service-Cloud.git && cd IT-Service-Cloud/it-service-cloud-setup-recipe` — all commands in this recipe run from that folder (keep the checks/, settings/, sharing/ layout). Version 1 is also tag `v1.0`.
 
-Automated setup of an AITS (Agentforce IT Services) org when a Salesforce org is connected via MeshMesh. Covers a read-only pre-flight audit, then feature-driven phases run only when selected: 0 IT Service Enablement (gate), Step 0 Sharing, 1a–1e IT Service Core, 3a–3e Agentforce, 4a–4c Unified Catalog, 5a–5c SLA Management, 6a–6c Assignment Rules, 7a–7b Knowledge, 8a–8c Self-service portal, 9a–9d Data Cloud (always last), 10a–10c Embedded chat, 11a–11c CMDB & Service Graph. Settings, sharing and permission changes run through the bundled scripts (`settings/`, `sharing/`); read-only checks live in `checks/`.
+Automated setup of an IT Service Cloud org when a Salesforce org is connected via MeshMesh. Covers a read-only pre-flight audit, then feature-driven phases run only when selected: 0 IT Service Enablement (gate), Step 0 Sharing, 1a–1e IT Service Core, 3a–3e Agentforce, 4a–4c Unified Catalog, 5a–5c SLA Management, 6a–6c Assignment Rules, 7a–7b Knowledge, 8a–8c Self-service portal, 9a–9d Data Cloud (always last), 10a–10c Embedded chat, 11a–11c CMDB & Service Graph. Settings, sharing and permission changes run through the bundled scripts (`settings/`, `sharing/`); read-only checks live in `checks/`.
 
 ---
 
@@ -122,7 +122,7 @@ Every step checks what exists in the connected org and drives the run from that.
  5. **User license incompatibilities are expected** — `UnifiedCatalogCommunityUserPsl` may fail for System Administrator users depending on licensing — treat failure as informational (RC-27).
  6. **ServiceItsmIntelligenceUdd flags belong to features** — each flag is owned by exactly one phase (3b/3c/3d/3e, 4b). The settings script combines all selected features that share a settings file into one deploy.
  7. **Deploy `enableEinsteinGPTDeployPromptTemplatesAsActive`** with Phase 3a (Agentforce Platform), not Phase 7a (Knowledge) — it's needed for agent prompt templates.
- 8. **API version 67.0 required for ServiceItsmIntelligenceUdd** — Deploying with API v63.0 fails with "Not available for deploy for this API version". All AITS settings packages should use `<version>67.0</version>` in package.xml.
+ 8. **API version 67.0 required for ServiceItsmIntelligenceUdd** — Deploying with API v63.0 fails with "Not available for deploy for this API version". All IT Service Cloud settings packages should use `<version>67.0</version>` in package.xml.
  9. **⚠️ NEVER cancel "Automated Process" deploys** — When Data Cloud is enabled, Salesforce triggers a background deploy by "Automated Process" to install the `ssot` (Salesforce Standard Data Model) `InstalledPackage`. This deploy takes \~10–30 minutes and **there is no UI or API to re-trigger it if cancelled**. Cancelling it will leave Data Cloud permanently stuck at "In Progress" on the Salesforce Foundations page. If you see an "Automated Process" deploy in the queue, **wait for it to finish** — do NOT cancel it even if it appears to block your deploys. If you have non-Automated-Process deploys stuck in `Pending`, wait for the Automated Process deploy to complete first. To avoid this conflict entirely, **deploy Data Cloud (Phase 9a) as the LAST programmatic phase** so the background install runs after all other deploys are done.
 10. **Connection alias may change between sessions** — The Salesforce org connection alias can change between sessions (e.g. `org-o2wdej` → `org-rrvydk`). Always read the active connection alias from the current task context rather than hardcoding it from a previous session.
 11. **Data Cloud provisioning is NOT visible on Deploy Status page** — The `CustomerDataPlatform.settings` deploy succeeds quickly, but actual Data Cloud provisioning is a background process (\~20-30 min) that does NOT appear as a metadata deploy on the Deploy Status page. Do not look for it there — it runs separately. Steps that depend on Data Cloud (e.g., Data Library) will show "Turn On Data Cloud" until provisioning completes.
@@ -146,9 +146,9 @@ Every step checks what exists in the connected org and drives the run from that.
 
 **Pre-flight audit** — `python3 checks/preflight.py <ORG> [--portal-site <name>]` (read-only, ~2–3 min). Prints a **skip map** — every phase with its state on the connected org and the suggested action — plus org/user and the deploy queue (in-flight deploys listed; never cancel Automated Process). It re-uses the phase checks: Phase 0 gate, settings `status --json` for all features (optional/mandatory tagged), permissions verify for all permission phases, sharing (EntityDefinition vs spec; Controlled-by-Parent rows named for confirmation via apply_owd plan), agents/Enhanced Chat, SLA, Assignment Rules, Knowledge readiness, CMDB, portal, embedded chat (manual 10c), Data Cloud. Writes only `checks/preflight-out/preflight-<ts>.md/.json`; never overwrites phase evidence. The user then selects which phases to run.
 
-apply_settings retrieves all settings files in ONE request; during a pre-flight, read-only `status` calls share one cached copy (`AITS_SETTINGS_CACHE`, honoured in status mode only — plan/deploy always retrieve fresh).
+apply_settings retrieves all settings files in ONE request; during a pre-flight, read-only `status` calls share one cached copy (`IT_SERVICE_CLOUD_SETTINGS_CACHE`, honoured in status mode only — plan/deploy always retrieve fresh).
 
-Hardening: apply_permissions drops AITS_SETTINGS_CACHE for its prerequisite status call; pre-flight removes its temp cache at exit
+Hardening: apply_permissions drops IT_SERVICE_CLOUD_SETTINGS_CACHE for its prerequisite status call; pre-flight removes its temp cache at exit
 
 **What the sharing part checks (manual equivalent, reference):**
 
@@ -190,13 +190,13 @@ The page header badge can say **"In Progress"** even when enabled — it reflect
 
 ## Step 0: Configure Sharing Settings (Organization-Wide Defaults)
 
-**Purpose:** Set the Organization-Wide Default (OWD) sharing settings for AITS-related objects so that records are accessible across the organization as needed.
+**Purpose:** Set the Organization-Wide Default (OWD) sharing settings for IT Service Cloud objects so that records are accessible across the organization as needed.
 
 **Execution model — two levels:** Level 1 (programmatic) is the default. Level 2 (browser) is used **only** for the rows listed in the generated `sharing/browser-fallback.md`. Both levels use the same target table below.
 
 ### Level 1 — Programmatic (default)
 
-Targets are defined in `sharing/aits-step0-sharing.xml` (bundled with this recipe) and applied by `sharing/apply_owd.py`. The script retrieves each target object's `CustomObject` metadata fresh, patches **only** `sharingModel`/`externalSharingModel`, and deploys the object-meta.xml files only (no fields or list views).
+Targets are defined in `sharing/it-service-cloud-sharing.xml` (bundled with this recipe) and applied by `sharing/apply_owd.py`. The script retrieves each target object's `CustomObject` metadata fresh, patches **only** `sharingModel`/`externalSharingModel`, and deploys the object-meta.xml files only (no fields or list views).
 
 1. `python3 sharing/apply_owd.py <org-alias> plan` — snapshot + fresh retrieve + patch + report. **No org change.**
 2. List all reductions from `plan` output to the user and get approval before `deploy --confirm`.
@@ -278,7 +278,7 @@ Follow this flow **only** for the rows listed in `sharing/browser-fallback.md`, 
 7. If the save fails with validation errors on objects NOT in the target table, STOP and show the errors to the user. Only change those rows after explicit user approval (Guardrail #4 — strict scope). Log which rows were changed.
 8. If Save is rejected for a row listed in `sharing/browser-fallback.md`, STOP and ask the user — do not change values.
 
-**Known pre-existing validation issues (may vary by org):** When saving, the page may flag errors on objects unrelated to AITS (e.g., Compliance Control Version, Compliance Policy Version, Regulation Version, Validation Procedure Version) that have `Controlled by Parent` internally but `Private` externally. Do **not** fix these automatically — STOP, show the errors to the user, and change them only with explicit approval (step 7).
+**Known pre-existing validation issues (may vary by org):** When saving, the page may flag errors on objects unrelated to IT Service Cloud (e.g., Compliance Control Version, Compliance Policy Version, Regulation Version, Validation Procedure Version) that have `Controlled by Parent` internally but `Private` externally. Do **not** fix these automatically — STOP, show the errors to the user, and change them only with explicit approval (step 7).
 
 **Expected result after save:**
 
@@ -395,7 +395,7 @@ Verify flags: `enableITSMIncidentMgmt`, `enableIncidentValidations`, `enableAuto
 
 **Deploy (Level 1 — programmatic, XML process):**
 
-Phase 1a uses `settings/aits-itsm-settings.xml` + `settings/apply_settings.py <ORG> status|plan|deploy|verify --features incident` (see "IT Service Core" above). The script retrieves the org's current IncidentMgmt settings (Metadata API — the deployable 35 flags), sets only spec-listed flags to target, preserves everything else, deploys async, and isolates failing flags per feature in dependency order, splitting only inside a feature (failed flags are reported, the rest is applied; RC-68). Target = ALL flags of the selected features true except those marked manage=false (only tier="required" flags with `--required-only`).
+Phase 1a uses `settings/it-service-cloud-settings.xml` + `settings/apply_settings.py <ORG> status|plan|deploy|verify --features incident` (see "IT Service Core" above). The script retrieves the org's current IncidentMgmt settings (Metadata API — the deployable 35 flags), sets only spec-listed flags to target, preserves everything else, deploys async, and isolates failing flags per feature in dependency order, splitting only inside a feature (failed flags are reported, the rest is applied; RC-68). Target = ALL flags of the selected features true except those marked manage=false (only tier="required" flags with `--required-only`).
 
 1. `python3 settings/apply_settings.py <org-alias> plan --features incident` — fresh retrieve + diff (no org change)
 2. `python3 settings/apply_settings.py <org-alias> deploy --features incident --confirm` — only after the user approves the `plan` output from step 1 (once per run); isolates failing flags; verify

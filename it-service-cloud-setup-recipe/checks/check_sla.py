@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS SLA Management checks (phases 5a-5c) - READ-ONLY. Reports PASS / FAIL / OPTIONAL with a next step; changes nothing.
+"""IT Service Cloud SLA Management checks (phases 5a-5c) - READ-ONLY. Reports PASS / FAIL / OPTIONAL with a next step; changes nothing.
 Usage: python3 checks/check_sla.py <org-alias> [--json out.json]
 5a Turn on SLA Management : Entitlement settings enableEntitlements + enableEntitlementVersioning = true.
                              If OFF -> Level 2 browser: SLA page 'Turn On' -> Confirm (settings deploy untested).

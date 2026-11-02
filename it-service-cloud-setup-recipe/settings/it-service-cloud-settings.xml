@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AITS Org Setup Recipe - IT Service Core features (programmatic, Level 1). Bundle with the recipe.
+  IT Service Cloud Setup Recipe - IT Service Core features (programmatic, Level 1). Bundle with the recipe.
   Consumed by settings/apply_settings.py. The run is FEATURE-driven: the user selects features (phases);
   only flags tagged with a selected feature are changed. All other flags are preserved as-is.
   Several features can live in one Salesforce settings file (Incident, Problem, Change share IncidentMgmt):
@@ -13,7 +13,7 @@
   After ANY interruption: query DeployRequest (last 15 min) before continuing - deploys may already have run.
   IT Service Enablement (itServiceEnablement) is NOT in these files (Phase 0 gate, checks/check_it_service_enablement.py).
 -->
-<SettingsProcess name="AITS_Feature_Settings" apiVersion="67.0">
+<SettingsProcess name="IT_Service_Cloud_Feature_Settings" apiVersion="67.0">
 
     <!-- Features shown to the user as phases. core = flag that means "feature is ON" for prerequisite checks. -->
     <!-- Knowledge (phase 7) is listed first: its settings file must deploy before IncidentMgmt, because

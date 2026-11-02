@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS permission phases (e.g. 1a-1d PSGs, 4c Unified Catalog, 6b business rules engine) from aits-itsm-settings.xml <permissions>.
+"""IT Service Cloud permission phases (e.g. 1a-1d PSGs, 4c Unified Catalog, 6b business rules engine) from it-service-cloud-settings.xml <permissions>.
 Assigns permission set licences (<psl>), permission sets (<ps>) and permission set groups (<psg>) - in that order -
 to the CONNECTED user only (recipe Guardrail #3). Availability-driven: a PSG that does
 not exist in the org is skipped (not a failure). An assignment the org rejects (e.g. licence type) is reported, not fatal.
@@ -15,7 +15,7 @@ if len(sys.argv) < 3: sys.exit(__doc__)
 ORG, MODE, A = sys.argv[1], sys.argv[2], sys.argv[3:]
 CONFIRM = "--confirm" in A
 SEL = A[A.index("--features") + 1].split(",") if "--features" in A else None
-SPEC = ET.parse(os.path.join(HERE, "aits-itsm-settings.xml")).getroot()
+SPEC = ET.parse(os.path.join(HERE, "it-service-cloud-settings.xml")).getroot()
 FEAT = {f.get("id"): f.attrib for g in SPEC.findall("features") for f in g}
 def die(m): print("ABORT:", m); sys.exit(1)
 def sf(args):
@@ -36,7 +36,7 @@ if not blocks: die(f"no <permissions> block for {SEL}")
 for b in blocks:
     reqs = [r for r in (FEAT[b.get("feature")].get("requires") or "").split(",") if r]
     if not reqs: continue
-    env = {k: v for k, v in os.environ.items() if k != "AITS_SETTINGS_CACHE"}   # a permission write never rests on a cached read
+    env = {k: v for k, v in os.environ.items() if k != "IT_SERVICE_CLOUD_SETTINGS_CACHE"}   # a permission write never rests on a cached read
     p = subprocess.run([sys.executable, os.path.join(HERE, "apply_settings.py"), ORG, "status", "--json", "--features", ",".join(reqs)], capture_output=True, text=True, env=env)
     try: stj = json.loads(p.stdout.strip().splitlines()[-1])
     except Exception: die(f"could not read prerequisite status: {(p.stdout or p.stderr)[-300:]}")

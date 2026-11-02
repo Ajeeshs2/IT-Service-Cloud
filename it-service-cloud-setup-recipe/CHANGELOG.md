@@ -1,9 +1,13 @@
-# CHANGELOG — aits-org-setup-recipe.updated.md
+# CHANGELOG — it-service-cloud-setup-recipe.md
 
-Source: `.refs/aits-org-setup-recipe/aits-org-setup-recipe.md` (unmodified)
+Source: `the "IT Service Cloud Setup Recipe" reference (version 1)` (unmodified)
 Run: it-service-cloud-bha853 — snapshot, Sharing, IT Service Core, Agentforce, Unified Catalog, SLA, Assignment Rules, Knowledge, Portal, Data Cloud, Embedded chat, CMDB
 Change log of record: `docs/recipe-changes.md` (Atlas). Writer of this draft: Sage. Auditor: Echo.
-Publish status: **Recipe version 2.0 — not published** (user approves publishing at the end of the run)
+Publish status: **Recipe version 2.1** — published as the reference "IT Service Cloud Setup Recipe v2" and GitHub tag `v2.1`
+
+## Version 2.1 (2026-11-02)
+
+Naming only: "AITS" is no longer used; everything is named IT Service Cloud. Folder `it-service-cloud-setup-recipe/`, recipe `it-service-cloud-setup-recipe.md`, specs `settings/it-service-cloud-settings.xml` and `sharing/it-service-cloud-sharing.xml`, cache variable `IT_SERVICE_CLOUD_SETTINGS_CACHE`, spec process names `IT_Service_Cloud_Feature_Settings` / `IT_Service_Cloud_Step0_OWD`, titles and labels. No behaviour change; nothing in the org is named after the recipe. Tag `v2.0` keeps the earlier folder and file names.
 
 ## Version 2.0 (2026-11-02)
 
@@ -11,7 +15,8 @@ This release = draft v15.1 + the version and bundle header. It is published as a
 
 | Version | Date | File | Notes |
 |---|---|---|---|
-| 2.0 | 2026-11-02 | New reference "IT Service Cloud Setup Recipe v2" (recipe + changelog); bundle on public GitHub `Ajeeshs2/IT-Service-Cloud`, folder `aits-org-setup-recipe/`, tag `v2.0` | Rebuilt, feature-driven recipe; 82 approved changes (detail below) |
+| 2.1 | 2026-11-02 | Reference "IT Service Cloud Setup Recipe v2" updated; GitHub tag `v2.1` | Renamed to IT Service Cloud everywhere (no behaviour change) |
+| 2.0 | 2026-11-02 | New reference "IT Service Cloud Setup Recipe v2" (recipe + changelog); bundle on public GitHub `Ajeeshs2/IT-Service-Cloud`, tag `v2.0` (earlier folder and file names; renamed in 2.1) | Rebuilt, feature-driven recipe; 82 approved changes (detail below) |
 | 1 | — | Separate reference "IT Service Cloud Setup Recipe" (unchanged); also GitHub tag `v1.0` | Original, unversioned recipe (sha256 1a65da5d…). Rollback = keep using version 1; no archive folder |
 
 **Versioning rule:** each future update raises the version number and adds a section here (e.g. 2.1 for a small update, 3.0 for a restructure). Earlier versions remain available unchanged (their own reference and git tag), never deleted.
@@ -26,16 +31,16 @@ The draft labels below (v1 … v15.1) are internal working drafts of version 2.0
 | RC-1 | approved · verified | Step 0 → "Target Organization-Wide Defaults" table | Replaced 28-row table with user-approved 23-row table (row order as given by user). Asset row updated per RC-33 (v6). Verified on it-service-cloud-bha853: 18/18 present objects match, 6 absent skipped |
 | RC-2 | approved | Step 0 target table; Phase 1 → "Sharing Settings Audit" query; Step 0 → "Verification query (post-save)"; Step 0 → "UI-to-API name mapping" | Removed Incident, Knowledge (`Knowledge__kav`, incl. "Usually already correct — verify" note), Broadcast Topic, Broadcast Communication, Broadcast Communication Audience |
 | RC-3 | approved | Step 0 target table (Inventory Reservation row) | No change — `Controlled by Parent` / `Private` / Skip if absent |
-| RC-31 | approved (2026-10-30) | Step 0 → removed "Metadata deploy does NOT work for OWD … MUST be done via the browser UI"; added "Execution model — two levels" + "Level 1 — Programmatic (default)" | Step 0 is programmatic via `sharing/apply_owd.py` + `sharing/aits-step0-sharing.xml` |
+| RC-31 | approved (2026-10-30) | Step 0 → removed "Metadata deploy does NOT work for OWD … MUST be done via the browser UI"; added "Execution model — two levels" + "Level 1 — Programmatic (default)" | Step 0 is programmatic via `sharing/apply_owd.py` + `sharing/it-service-cloud-sharing.xml` |
 | RC-45 | approved (2026-10-30) | Step 0 → Level 1 steps (plan → review → `deploy --confirm` → verify, exit codes 0/2/1); "Level 2 — Browser fallback" heading + scope line wrapping the existing URL / page verification / interaction flow (kept verbatim) | Browser only for rows in generated `sharing/browser-fallback.md`, then `verify` |
 | RC-37 | approved (2026-10-30) | Step 0 → note under target table | Inventory Reservation row unchanged; note: untested (object absent on reference org), rejected combination → Level 2 list. Wording corrected per Echo: the RC-37 text said "untested on orgs without the object", which is inverted. Atlas asked to align recipe-changes.md |
 | RC-20 + RC-46 | approved (2026-10-30) | Step 0 Level 2 → step 7 replaced, new step 8; "Known pre-existing validation issues" auto-fix replaced with stop-and-ask; Level 1 → note on invalid specs / systemic failures | Save errors on unlisted rows or rejection of a listed row → STOP and ask the user; values change only with approval |
 | RC-33 | approved (2026-10-30) | Step 0 table → Asset = Controlled by Parent / Controlled by Parent ("Follows Account"); Phase 1 → Asset note after audit text | Asset follows Account (replaces the earlier decoupled Public Read/Write / Read Only target) |
 | RC-39 | approved (2026-10-30) | Step 0 → "Account children" note under target table | Account change cascades to Contact, Order, Asset; plan/verify report them; no extra confirm |
 | RC-47 | approved scope (RC-33/39) | Step 0 → note under "Verification query (post-save)" (per Echo v6 audit) | Controlled-by-Parent rows (Asset; Inventory Reservation internal) verified from retrieved object-meta.xml; `verify` does it automatically |
-| RC-35 | approved (2026-10-30) | none (packaging) | `recipe/sharing/aits-step0-sharing.xml` + `recipe/sharing/apply_owd.py` bundled with the recipe |
+| RC-35 | approved (2026-10-30) | none (packaging) | `recipe/sharing/it-service-cloud-sharing.xml` + `recipe/sharing/apply_owd.py` bundled with the recipe |
 | RC-48 | approved · verified (2026-10-30) | New "## Phase 0: IT Service Enablement (gate)" before Phase 1 (RC-48 text verbatim; "see RC-49" → "see RC-49 (appendix, proposed)"); Recipe Summary (first row); Execution Order block (first line); Optimized execution order (item 0); Feature Selection (mandatory note); Recipe Summary intro sentence "Programmatic Phases (Phase 0 gate, then …)" (v7.1, per Echo) | IT Service Enablement must be ON before any other phase or step; check via `checks/check_it_service_enablement.py` (exit 0/3/1), page fallback |
-| RC-52 | approved · verified (2026-10-30) | Phase 3 → "Deploy" replaced with "Deploy (Level 1 — programmatic, XML process)" (RC-52 text + plan/deploy/verify commands, exit codes 0/2/1); Combined-deploy callout now points to the script; Phase 5 and Phase 6 "Deploy" → covered by the Phase 3 script run | Incident + Problem + Change via `settings/apply_settings.py` + `settings/aits-itsm-settings.xml`; target = all flags true except manage=false |
+| RC-52 | approved · verified (2026-10-30) | Phase 3 → "Deploy" replaced with "Deploy (Level 1 — programmatic, XML process)" (RC-52 text + plan/deploy/verify commands, exit codes 0/2/1); Combined-deploy callout now points to the script; Phase 5 and Phase 6 "Deploy" → covered by the Phase 3 script run | Incident + Problem + Change via `settings/apply_settings.py` + `settings/it-service-cloud-settings.xml`; target = all flags true except manage=false |
 | RC-53 | approved (2026-10-30) | Phase 3 → "Slack broadcasts" note | `enableSlackBroadcastType` not managed (org value preserved) |
 | RC-54 | approved (2026-10-30) | Phase 3 → read-then-merge deploy steps removed; flags reference header → "reference only" | Static 35-flag list kept as reference only |
 | RC-55 | approved (2026-10-30) | Phase 3 → step 2 now `deploy IncidentMgmt --confirm` (after user approves the plan, once per run); paragraph after exit codes (RC-55 text verbatim: approval scope, split isolation, cap `3 × ceil(log2 n) + 1`, clean stop, `--retry-failed`) | One approval per run; deploy cap scales with batch size |
@@ -125,31 +130,31 @@ RC-4, RC-41 — both still proposed. The appendix intro now states that every li
 - Agentforce / SLA / Assignment Rules / Knowledge / Portal / Embedded chat / CMDB: status files in the phase folders; checks PASS as noted in each section's "Observed behavior".
 - Data Cloud: turned on 2026-11-02, deploy 0AfgL00000cRYxOSAW Succeeded (`settings/CustomerDataPlatform-deploy-log.json`, `-result.md`). Background Automated Process install in progress at handoff time per Atlas (not independently verified by Sage).
 
-## Bundle (13 files — all match Atlas's FINAL hashes; settings XML 94e19d30 since v15)
+## Bundle (13 files, version 2.1 — paths relative to `it-service-cloud-setup-recipe/`; logic identical to v2.0, naming only)
 
 | File | SHA-256 |
 |---|---|
-| `recipe/checks/check_agents.py` | `472bb3cb38ad1c9526a364cf79900e0340a53b88e682cc912c4480a77dcd3dfe` |
-| `recipe/checks/check_assignment_rules.py` | `456e3b1d0a02680b61a0bee59efe44f8165dca3e503ed394f759bbd8f59fbf73` |
-| `recipe/checks/check_cmdb.py` | `dc1b08c5200ce74a76950cb416470e613c0628eb7171b9165dfc6a9659f611b5` |
-| `recipe/checks/check_it_service_enablement.py` | `091fe523d8f584c397e662fb437853ceee70561724240f30ea0bed8d3075cab5` |
-| `recipe/checks/check_knowledge.py` | `a37553c3485922620308a96a4aa91860ae11579e902ff5eaf16de53ed7d11966` |
-| `recipe/checks/check_portal.py` | `d38a087cbdf2f5e62d10e330a0f03b51d01b510870678563b49ad80c0da1cfac` |
-| `recipe/checks/check_sla.py` | `dd6542a2e1f923eb632d60e0dc7a070dd102d26262967041fa2bd826f584aaf2` |
-| `recipe/checks/preflight.py` | `1c02845574e1992810ab28b7316890b65288107b23a2e5cd08a95b5d62e7f3c3` |
-| `recipe/settings/aits-itsm-settings.xml` | `94e19d3073be942f27208a5bb0826fa06fe15cfa95e76d96933a1c114ad1cf82` |
-| `recipe/settings/apply_permissions.py` | `3ce277d72801d81bb235e0b179e1f34b0999dfd77c9695c3587bfabe1be40b97` |
-| `recipe/settings/apply_settings.py` | `d2a79ac6c0c55ade884c6f2eb80b81c3208891708bb87463513ddf1e6bbb5de6` |
-| `recipe/sharing/aits-step0-sharing.xml` | `94768d750736644584ed1f5328a4bb85fac247c65a0ee13a0830b570a4dfefd7` |
-| `recipe/sharing/apply_owd.py` | `50601b3c9eeb5faa9a8a4c93fdf021255bda2c2cfdc2048f87cd3c39e6bdb814` |
+| `checks/check_agents.py` | `04df3e99e4137b4ff30755ba99731c1f16039bd117edfe5e74d37bbb1a6189d1` |
+| `checks/check_assignment_rules.py` | `f9f44d6c7e4e9b78b2e79ad3a2c30c1daa44794be1c2f6d0c1cf1783de582bd6` |
+| `checks/check_cmdb.py` | `43341db9d60a45a46398e1d82b0199df09fb0729c360e78e396301d401557855` |
+| `checks/check_it_service_enablement.py` | `cc93a667b0f16e430bc934ca2f9ba328c5d9f8928628367946c58ad5e4997b74` |
+| `checks/check_knowledge.py` | `6ecd059f37d678477c868af92a8ba23d941a306e06a5df8cad77600f7e228177` |
+| `checks/check_portal.py` | `1d331fe656be925a403c9bbf33a443c031c60513142902655b6824b8793cdc81` |
+| `checks/check_sla.py` | `f19f0655fd65ecceacc22ef565226bdcd0ce236fee44f3b6b6a1b369da460302` |
+| `checks/preflight.py` | `da8c2aa5145ef4b3132d33ca6e72876346edcfa4c5a2633a0dacbaf8911fe6da` |
+| `settings/it-service-cloud-settings.xml` | `a64475c3821f6f615f97540ae88cd4f7268f8ce8f88b31cc677c24647a11fdd3` |
+| `settings/apply_permissions.py` | `387cc3ab2c8fd53d5f78ec1f07087ad45f6c256596fd597549218b7e0261e6a5` |
+| `settings/apply_settings.py` | `eb8ec6425062921cf8f298bc9272f2532207b53b87c970e6e446a3e876c7926d` |
+| `sharing/it-service-cloud-sharing.xml` | `98a4ab49db4197a94e616cc305ebb35a7ac66ff93378ab0e229c1231bb54b5a3` |
+| `sharing/apply_owd.py` | `da1ff93104457589299d25f135f5d2903fa4b10c8196728a54d79c25b0de456b` |
 
 Checks at copy time: every file's hash = the source file = Atlas's stated prefix; all `.py` files parse; both XML files are well-formed; no `__pycache__`. Paths are relative to each script's folder, so the recipe's `checks/…`, `settings/…`, `sharing/…` paths work with this layout. Excluded: `_work/`, `preflight-out/`, retrieve/deploy outputs, before/after JSON, plan/result reports.
 
 Spec gaps flagged in v14 are closed by RC-91 (platform + datacloud permission blocks; "Data Cloud User Enhanced Security" is a manual step).
 
-## Publish plan (pending user approval — NOT executed)
+## Publish plan (executed 2026-11-02, user-approved)
 
-Target: NEW reference "IT Service Cloud Setup Recipe v2" (version 1 reference untouched). Files: `recipe/aits-org-setup-recipe.updated.md` → `aits-org-setup-recipe.md`; `recipe/CHANGELOG.md`. The 13 bundle files are published on the public GitHub repository (folder `aits-org-setup-recipe/`, tag `v2.0`) at their relative paths. Excluded: `snapshot/`, `docs/` (org-specific evidence). Before publishing: re-run the checks (approved-only body, appendix vs recipe-changes.md, all 13 hashes vs source, no caches).
+Target: NEW reference "IT Service Cloud Setup Recipe v2" (version 1 reference untouched). Files: the recipe (saved as `recipe.md`), `CHANGELOG.md` and the two XML specs. The 13 bundle files are published on the public GitHub repository (folder `it-service-cloud-setup-recipe/`, tag `v2.1`; tag `v2.0` uses the earlier folder and file names) at their relative paths. Excluded: `snapshot/`, `docs/` (org-specific evidence). Before publishing: re-run the checks (approved-only body, appendix vs recipe-changes.md, all 13 hashes vs source, no caches).
 
 ## Revisions
 
@@ -181,7 +186,8 @@ Target: NEW reference "IT Service Cloud Setup Recipe v2" (version 1 reference un
 - v14.1 (2026-11-02): RC-91 applied (prompt template PSs 3a and Data Cloud PSs 9b via the permissions script); settings XML 3098c812; RC-26 evidence noted.
 - v15 (2026-11-02): user decisions applied — the 29-RC recommended set (RC-6 7 11 12 13 14 15 19 21 22 23 24 26 27 28 30 32 34 36 38 40 42 43 50 51 61 62 63 64), RC-49 (UNTESTED), RC-90 (note), RC-89 update (9c later run, 9d follow-up run), RC-91 update (Data Cloud User Enhanced Security = manual). Original Steps 11/12 restored verbatim under 9d. Settings XML 94e19d30. Appendix: RC-4, RC-41 only. v14.1 backed up in Sage's folder.
 - v15 audit (Echo): FINAL PASS (740eab10).
-- v15.1 (2026-11-02): single hunk — Phase 1c "Optional features" → "Optional flags (enabled unless --required-only): …" (wording per Atlas; follows the approved RC-65 feature model; flags confirmed tier="optional" in settings/aits-itsm-settings.xml). Nothing else changed.
+- v15.1 (2026-11-02): single hunk — Phase 1c "Optional features" → "Optional flags (enabled unless --required-only): …" (wording per Atlas; follows the approved RC-65 feature model; flags confirmed tier="optional" in settings/it-service-cloud-settings.xml). Nothing else changed.
 - v15.2 = Recipe version 2.0 (2026-11-02): version header added under the recipe title; CHANGELOG "Version 2.0" section with version 1 listed as the archived original (`recipe/archive/`, created by Atlas) and the versioning rule. Nothing else changed.
-- 2.0: bundle location added — one line under the version header: GitHub `Ajeeshs2/IT-Service-Cloud`, folder `aits-org-setup-recipe/`, tag `v2.0` (version 1 = tag `v1.0`); the saved reference cannot hold the `.py` scripts. Nothing else changed.
+- 2.0: bundle location added — one line under the version header: GitHub `Ajeeshs2/IT-Service-Cloud`, tag `v2.0` (earlier folder and file names; renamed in 2.1) (version 1 = tag `v1.0`); the saved reference cannot hold the `.py` scripts. Nothing else changed.
 - 2.0: published as a new recipe; bundle on public GitHub — header lines replaced (successor to "IT Service Cloud Setup Recipe" v1, which remains unchanged; clone command for tag `v2.0`); version table, rollback and publish-plan wording updated; archive folder removed by Atlas.
+- 2.1: renamed to IT Service Cloud everywhere (folder, recipe file, spec files, cache variable, spec process names, titles, labels); clone command now uses tag `v2.1`. No behaviour change.

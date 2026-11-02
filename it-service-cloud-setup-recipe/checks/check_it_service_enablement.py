@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS Phase 0 gate: IT Service Enablement must be ON before any other enablement.
+"""IT Service Cloud Phase 0 gate: IT Service Enablement must be ON before any other enablement.
 Usage: python3 checks/check_it_service_enablement.py <org-alias>
 Exit: 0 = ON (proceed) · 3 = OFF (turn it on first: Level 2 browser page below) · 1 = check failed (fallback: read the page)
 Check source: Tooling API IncidentMgmtSettings.Metadata.itServiceEnablement (verified to match the Salesforce Go page

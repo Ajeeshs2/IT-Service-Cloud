@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS Assignment Rules checks (phases 6a-6c) - READ-ONLY. Changes nothing.
+"""IT Service Cloud Assignment Rules checks (phases 6a-6c) - READ-ONLY. Changes nothing.
 Usage: python3 checks/check_assignment_rules.py <org-alias> [--json out.json]
 6a Context Service      : IndustriesContext.enableContextDefinitions (same flag as phase 4a) - via settings/apply_settings.py status --json.
 6b BRE permissions      : run settings/apply_permissions.py <org> verify --features bre (licences + permission sets) - summarised here.

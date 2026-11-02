@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AITS Knowledge readiness check (phase 7b) - READ-ONLY. Changes nothing.
+"""IT Service Cloud Knowledge readiness check (phase 7b) - READ-ONLY. Changes nothing.
 Usage: python3 checks/check_knowledge.py <org-alias> [--json out.json]
 Checks: Knowledge ON (7a core, via settings/apply_settings.py status --json) · connected user has Knowledge User ·
 Knowledge__kav has the ITSM fields Details, Issue, Resolution, Root Cause, Workaround (needed by the Data Library) ·

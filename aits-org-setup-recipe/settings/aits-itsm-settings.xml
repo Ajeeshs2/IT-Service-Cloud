@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AITS Org Setup Recipe - IT Service Core features (programmatic, Level 1). Bundle with the recipe.
+  Consumed by settings/apply_settings.py. The run is FEATURE-driven: the user selects features (phases);
+  only flags tagged with a selected feature are changed. All other flags are preserved as-is.
+  Several features can live in one Salesforce settings file (Incident, Problem, Change share IncidentMgmt):
+  selected features in the same file are combined into one deploy.
+  Prerequisites: a selected feature needs each required feature to be selected in the same run or already ON in the org.
+  Method: retrieve Settings from the org, set only selected flags, deploy async, verify by re-retrieve.
+  Flags listed but absent in the org are skipped (not a failure). manage="false" flags are documented, never changed.
+  Flags with requires="..." are skipped as not available unless the assume-available option is given.
+  deploy requires the confirm option (one user approval per run); failure isolation is capped at 3*ceil(log2 n)+1 deploys.
+  After ANY interruption: query DeployRequest (last 15 min) before continuing - deploys may already have run.
+  IT Service Enablement (itServiceEnablement) is NOT in these files (Phase 0 gate, checks/check_it_service_enablement.py).
+-->
+<SettingsProcess name="AITS_Feature_Settings" apiVersion="67.0">
+
+    <!-- Features shown to the user as phases. core = flag that means "feature is ON" for prerequisite checks. -->
+    <!-- Knowledge (phase 7) is listed first: its settings file must deploy before IncidentMgmt, because
+         IncidentMgmt.enableAiKnowledgeCreation needs Knowledge ON. -->
+    <features group="Knowledge">
+        <feature id="knowledge" phase="7a" label="Knowledge settings" core="enableKnowledge" requires=""/>
+    </features>
+
+    <features group="IT Service Core">
+        <feature id="incident" phase="1a" label="Incident Management" core="enableITSMIncidentMgmt" requires=""/>
+        <feature id="problem"  phase="1b" label="Problem Management"  core="enableITSMProblemMgmt"  requires="incident"/>
+        <feature id="change"   phase="1c" label="Change Management"   core="enableITSMChangeMgmt"   requires="incident"/>
+        <feature id="release"  phase="1d" label="Release Management"  core="enableITSMReleaseMgmt"  requires="change"/>
+        <feature id="notify"   phase="1e" label="Notification Service" core="enableNotifications" requires="incident" mandatory="true"/>
+    </features>
+
+    <!-- IT Service Core permission groups (recipe PSG list), assigned to the CONNECTED user by settings/apply_permissions.py. -->
+    <permissions feature="incident">
+        <psg name="IncidentManagerPSG" label="Incident Manager"/>
+        <psg name="IncidentFulfillerPSG" label="Incident Fulfiller"/>
+        <psg name="MajorIncidentManagerPSG" label="Major Incident Manager"/>
+    </permissions>
+    <permissions feature="problem">
+        <psg name="ProblemManagerPSG" label="Problem Manager"/>
+        <psg name="ProblemFulfillerPSG" label="Problem Fulfiller"/>
+    </permissions>
+    <permissions feature="change">
+        <psg name="ChangeRequestManagerPSG" label="Change Request Manager"/>
+        <psg name="ChangeRequestFulfillerPSG" label="Change Request Fulfiller"/>
+    </permissions>
+    <permissions feature="release">
+        <psg name="ReleaseManagerPSG" label="Release Manager"/>
+        <psg name="ReleaseGroupPSG" label="Release Group"/>
+    </permissions>
+
+    <features group="Unified Catalog">
+        <feature id="context" phase="4a" label="Context Service"                core="enableContextDefinitions"  requires=""/>
+        <feature id="catalog" phase="4b" label="Service catalog Apex templates" core="enableSvcCtlgApexTemplate" requires="context"/>
+        <feature id="ucperms" phase="4c" label="Unified Catalog permissions"    core=""                          requires="context" kind="permissions"/>
+    </features>
+
+    <!-- 4c: permission set groups assigned to the CONNECTED user by settings/apply_permissions.py (not a settings file). -->
+    <permissions feature="ucperms">
+        <psg name="UnifiedCatalogAdminPsl" label="Unified Catalog Admin"/>
+        <psg name="UnifiedCatalogAgentPsl" label="Unified Catalog Agent"/>
+        <psg name="UnifiedCatalogCommunityUserPsl" label="Unified Catalog Community User" note="May fail for some licence types - reported, not fatal"/>
+    </permissions>
+
+    <features group="Assignment Rules">
+        <feature id="bre"      phase="6b" label="Business rules engine permissions" core="" requires="context" kind="permissions"/>
+    </features>
+    <!-- 6a Context Service = phase 4a (same flag, set once). 6c Decision Table Access = checks/check_assignment_rules.py (no setting exists; page is the fallback). -->
+    <permissions feature="bre">
+        <psl name="BRERuntime" label="BRE Runtime licence"/>
+        <psl name="BREDesigner" label="BRE Designer licence"/>
+        <ps name="BRERuntime" label="BRE Runtime" requiresPsl="BRERuntime"/>
+        <ps name="BREDesigner" label="BRE Designer" requiresPsl="BREDesigner"/>
+    </permissions>
+
+    <features group="Data Cloud">
+        <feature id="datacloud" phase="9a" label="Data Cloud (runs LAST - background install, never cancel)" core="enableCustomerDataPlatform" requires=""/>
+        <feature id="piimask"   phase="9c" label="AI Trust PII masking"  core="enableTrustPIIMasking" requires="datacloud" optional="true"/>
+    </features>
+
+    <!-- 3a: prompt template permission sets (connected user) -->
+    <permissions feature="platform">
+        <ps name="EinsteinGPTPromptTemplateUser" label="Prompt Template User"/>
+        <ps name="EinsteinGPTPromptTemplateManager" label="Prompt Template Manager"/>
+    </permissions>
+    <!-- 9b: Data Cloud Admin (connected user). "Data Cloud User Enhanced Security" (GenieUserEnhancedSecurity) is a MANUAL step
+         after provisioning - assigned by an admin in Setup to the users who need it; not assigned by any script. -->
+    <permissions feature="datacloud">
+        <ps name="GenieAdmin" label="Data Cloud Admin"/>
+    </permissions>
+
+    <features group="Agentforce">
+        <feature id="platform"  phase="3a" label="Agentforce Platform"        core="enableAgentPlatform"          requires=""/>
+        <feature id="fulfiller" phase="3b" label="IT Service Fulfiller agent" core="enableItSrvcsFulfillerAgent"  requires="platform,incident"/>
+        <feature id="employee"  phase="3c" label="IT Employee Assistant"      core="enableItSrvcsEmployeeAgent"   requires="platform"/>
+        <feature id="proactive" phase="3d" label="Proactive Assistant"        core="enableProactvAsstforItSrvcs"  requires="fulfiller"/>
+        <feature id="aiextras"  phase="3e" label="Optional AI features"       core=""                             requires="platform" optional="true"/>
+    </features>
+
+    <setting name="Knowledge" note="Knowledge (7a). Retrieve-patch-deploy keeps the nested suggestedArticles block exactly as retrieved (Learning #16 risk removed).">
+        <flag name="enableKnowledge" feature="knowledge" target="true" tier="required" label="Knowledge"/>
+        <flag name="enableLightningKnowledge" feature="knowledge" target="true" tier="required" label="Lightning Knowledge"/>
+        <flag name="enableCreateEditOnArticlesTab" feature="knowledge" target="true" tier="optional" label="Create and edit on Articles tab"/>
+        <flag name="enableExternalMediaContent" feature="knowledge" target="true" tier="optional" label="External media content"/>
+        <flag name="enableKbStandardSharing" feature="knowledge" target="true" tier="optional" label="Standard sharing for Knowledge"/>
+        <flag name="enableKnowledgeArticleTextHighlights" feature="knowledge" target="true" tier="optional" label="Article text highlights"/>
+        <flag name="showArticleSummariesCustomerPortal" feature="knowledge" target="true" tier="optional" label="Article summaries in customer portal"/>
+        <flag name="showArticleSummariesInternalApp" feature="knowledge" target="true" tier="optional" label="Article summaries in internal app"/>
+        <flag name="showValidationStatusField" feature="knowledge" target="true" tier="optional" label="Validation status field"/>
+        <flag name="votingEnabled" feature="knowledge" target="true" tier="optional" label="Article voting"/>
+    </setting>
+    <setting name="IncidentMgmt" note="Shared by Incident, Problem and Change. Slack broadcasts not managed (RC-53).">
+        <flag name="enableIncidentMgmt" feature="incident" target="true" tier="required" label="Base Incident object"/>
+        <flag name="enableITSMIncidentMgmt" feature="incident" target="true" tier="required" label="ITSM Incident Management"/>
+        <flag name="enableIncidentValidations" feature="incident" target="true" tier="required" label="Incident validation rules"/>
+        <flag name="enableAutoClosureOfChildIncident" feature="incident" target="true" tier="required" label="Auto-close child incidents"/>
+        <flag name="enableEmailToIncident" feature="incident" target="true" tier="required" label="Email to Incident"/>
+        <flag name="enableEmailToIncidentAi" feature="incident" target="true" tier="optional" label="AI-assisted Email to Incident"/>
+        <flag name="enableSaveE2IncidentAttachment" feature="incident" target="true" tier="optional" label="Save Email-to-Incident attachments"/>
+        <flag name="enableDedupE2IncidentAttachment" feature="incident" target="true" tier="optional" label="De-duplicate Email-to-Incident attachments"/>
+        <flag name="enableChatToIncidentAi" feature="incident" target="true" tier="optional" label="Chat to Incident AI"/>
+        <flag name="enableIncPriorityMatrix" feature="incident" target="true" tier="optional" label="Incident priority matrix"/>
+        <flag name="enableIncPriorityOverride" feature="incident" target="true" tier="optional" label="Incident priority override"/>
+        <flag name="enableITSMMajorIncParent" feature="incident" target="true" tier="optional" label="Major incident as parent"/>
+        <flag name="enableMiawForRequestorAgent" feature="incident" target="true" tier="optional" label="Messaging for requestor agent"/>
+        <flag name="enableAiKnowledgeCreation" feature="incident" target="true" tier="optional" label="AI Knowledge creation (needs Einstein GenAI)" requiresFeature="knowledge"/>
+        <flag name="enableCnfgItemCopyForRecords" feature="incident" target="true" tier="optional" label="Copy configuration items to records"/>
+        <flag name="enablePrivilegeAssignment" feature="incident" target="true" tier="optional" label="Privilege assignment"/>
+        <flag name="enableSiteBannerBroadcastType" feature="incident" target="true" tier="optional" label="Site banner broadcasts"/>
+        <flag name="enableAlertBroadcastType" feature="incident" target="true" tier="optional" label="Alert broadcasts"/>
+        <flag name="enableEmailBroadcastType" feature="incident" target="true" tier="optional" label="Email broadcasts"/>
+        <flag name="enableSlackBroadcastType" feature="incident" target="true" tier="optional" label="Slack broadcasts (needs Slack)" manage="false" requires="Slack (OrgPreferences.BroadcastSlackEnabled)" note="Dropped by user 2026-10-30: deploy fails with OrgPreferences.BroadcastSlackEnabled when Slack is not set up. Not managed - org value preserved."/>
+        <flag name="enableITSMProblemMgmt" feature="problem" target="true" tier="required" label="Problem Management"/>
+        <flag name="enableProblemValidations" feature="problem" target="true" tier="required" label="Problem validation rules"/>
+        <flag name="enableProbPriorityMatrix" feature="problem" target="true" tier="optional" label="Problem priority matrix"/>
+        <flag name="enableProbPriorityOverride" feature="problem" target="true" tier="optional" label="Problem priority override"/>
+        <flag name="enableAutoCreationOfProblem" feature="problem" target="true" tier="optional" label="Auto-create Problem from Incidents"/>
+        <flag name="enableITSMChangeMgmt" feature="change" target="true" tier="required" label="Change Management"/>
+        <flag name="enableRiskAssessment" feature="change" target="true" tier="required" label="Change risk assessment"/>
+        <flag name="enableChangeRequestValidations" feature="change" target="true" tier="optional" label="Change Request validation rules"/>
+        <flag name="enableChgRqstCnflctDetection" feature="change" target="true" tier="optional" label="Change Request conflict detection"/>
+        <flag name="enableChgCnfcltForMaintSchd" feature="change" target="true" tier="optional" label="Change conflict: maintenance schedule"/>
+        <flag name="enableChgCnflctForChgOwner" feature="change" target="true" tier="optional" label="Change conflict: change owner"/>
+        <flag name="enableChgCnflctForCnfgItems" feature="change" target="true" tier="optional" label="Change conflict: configuration items"/>
+        <flag name="enableChgCnflctForMoratSchd" feature="change" target="true" tier="optional" label="Change conflict: moratorium schedule"/>
+        <flag name="enableChangePriorityMatrix" feature="change" target="true" tier="optional" label="Change priority matrix"/>
+        <flag name="enableChangePriorityOverride" feature="change" target="true" tier="optional" label="Change priority override"/>
+    </setting>
+    <setting name="ReleaseMgmt" note="Requires Change Management ON. Read via Metadata API retrieve (RC-12).">
+        <flag name="enableITSMReleaseMgmt" feature="release" target="true" tier="required" label="Release Management"/>
+        <flag name="enableReleaseValidations" feature="release" target="true" tier="optional" label="Release validation rules"/>
+        <flag name="enableReleaseEventCreation" feature="release" target="true" tier="optional" label="Release event creation (not in original recipe)"/>
+    </setting>
+    <setting name="ServiceCloudNotificationOrchestrator" note="Notification Service (1e, mandatory - always runs when Incident is selected or ON). Slack/Teams channels are out of scope.">
+        <flag name="enableNotifications" feature="notify" target="true" tier="required" label="Notification Service"/>
+        <flag name="enableEmailNotifications" feature="notify" target="true" tier="required" label="Email notifications"/>
+        <flag name="enableInAppNotifications" feature="notify" target="true" tier="required" label="In-app notifications"/>
+        <flag name="enableSlackNotifications" feature="notify" target="true" tier="optional" label="Slack notifications" manage="false" requires="Slack" note="Slack integration is out of the recipe's scope - not managed."/>
+        <flag name="enableTeamsNotifications" feature="notify" target="true" tier="optional" label="Microsoft Teams notifications" manage="false" requires="Microsoft Teams" note="Teams integration is out of the recipe's scope - not managed."/>
+    </setting>
+    <setting name="IndustriesContext" note="Context Service (4a) - shared with Assignment Rules. Must deploy before ServiceItsmIntelligenceUdd (4b needs it).">
+        <flag name="enableContextDefinitions" feature="context" target="true" tier="required" label="Context Definitions (Context Service)"/>
+    </setting>
+    <setting name="AgentPlatform" note="Agentforce platform (3a).">
+        <flag name="enableAgentPlatform" feature="platform" target="true" tier="required" label="Agent Platform"/>
+    </setting>
+    <setting name="EinsteinGpt" note="Einstein generative AI (3a). Other EinsteinGpt flags (provider disables, beta, security) are not listed and are preserved.">
+        <flag name="enableEinsteinGptPlatform" feature="platform" target="true" tier="required" label="Einstein generative AI"/>
+        <flag name="enableEinsteinGPTDeployPromptTemplatesAsActive" feature="platform" target="true" tier="required" label="Deploy prompt templates as active"/>
+    </setting>
+    <setting name="ServiceItsmIntelligenceUdd" note="Agents (3b/3c), Proactive Assistant (3d), optional AI (3e). Flags with requiresFeature need that feature selected or ON.">
+        <flag name="enableItSrvcsFulfillerAgent" feature="fulfiller" target="true" tier="required" label="IT Service Fulfiller agent"/>
+        <flag name="enableItSrvcsEmployeeAgent" feature="employee" target="true" tier="required" label="IT Employee agent"/>
+        <flag name="enableProactvAsstforItSrvcs" feature="proactive" target="true" tier="required" label="Proactive Assistant master switch"/>
+        <flag name="enableCheckIncAttrProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: check attributes"/>
+        <flag name="enableIncAsgntProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: assignment"/>
+        <flag name="enableIncPrpsRsolSumProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: proposed resolution summary"/>
+        <flag name="enableIncRootCseSumProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: root cause summary"/>
+        <flag name="enableIncSmlrRecProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: similar records"/>
+        <flag name="enableIncSrvcPlanProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: service plan"/>
+        <flag name="enableIncSummaryProactvAsst" feature="proactive" target="true" tier="optional" label="Incident: summary"/>
+        <flag name="enableProactivAsstForProbm" feature="proactive" target="true" tier="optional" label="Problem: Proactive Assistant" requiresFeature="problem"/>
+        <flag name="enableCheckProbmForAttr" feature="proactive" target="true" tier="optional" label="Problem: check attributes" requiresFeature="problem"/>
+        <flag name="enableCreaProbmForRootCseSum" feature="proactive" target="true" tier="optional" label="Problem: create from root cause summary" requiresFeature="problem"/>
+        <flag name="enableSumForProbm" feature="proactive" target="true" tier="optional" label="Problem: summary" requiresFeature="problem"/>
+        <flag name="enableAsocSmlrProbToProb" feature="proactive" target="true" tier="optional" label="Problem: associate similar problems" requiresFeature="problem"/>
+        <flag name="enableProposSumForProbm" feature="proactive" target="true" tier="optional" label="Problem: proposed summary" requiresFeature="problem"/>
+        <flag name="enableIncidentTriageAgent" feature="aiextras" target="true" tier="optional" label="Incident Triage agent"/>
+        <flag name="enableItSrvcsEmpSetup" feature="aiextras" target="true" tier="optional" label="Employee agent setup"/>
+        <flag name="enableEinsteinAssignGrpInc" feature="aiextras" target="true" tier="optional" label="Einstein: assign groups to Incidents"/>
+        <flag name="enableEinsteinProbmCreationInc" feature="aiextras" target="true" tier="optional" label="Einstein: create Problems from Incidents" requiresFeature="problem"/>
+        <flag name="enableAsgnProbWEinstein" feature="aiextras" target="true" tier="optional" label="Einstein: assign Problems" requiresFeature="problem"/>
+        <flag name="enableCreateChgReqWithEinstein" feature="aiextras" target="true" tier="optional" label="Einstein: create Change Requests" requiresFeature="change"/>
+        <flag name="enableQuickActnForSvcPlan" feature="aiextras" target="true" tier="optional" label="Quick action for service plans"/>
+        <flag name="enableSvcCtlgApexTemplate" feature="catalog" target="true" tier="required" label="Service catalog Apex templates"/>
+        <flag name="enableCoexistFeature" feature="aiextras" target="true" tier="optional" label="Coexistence feature" manage="false" note="Purpose unclear - not managed until confirmed."/>
+    </setting>
+    <setting name="EinsteinAI" note="9c PII masking (optional, needs Data Cloud provisioned). Other EinsteinAI trust flags are not listed and are preserved.">
+        <flag name="enableTrustPIIMasking" feature="piimask" target="true" tier="required" label="AI Trust PII masking"/>
+    </setting>
+    <setting name="CustomerDataPlatform" note="9a Data Cloud - MUST be the LAST settings file. Deploy triggers a background Automated Process InstalledPackage (ssot) deploy, 10-30 min: NEVER cancel it; nothing else may deploy until it finishes.">
+        <flag name="enableCustomerDataPlatform" feature="datacloud" target="true" tier="required" label="Data Cloud"/>
+    </setting>
+</SettingsProcess>

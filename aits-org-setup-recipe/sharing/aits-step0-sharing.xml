@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AITS Org Setup Recipe — Step 0: Organization-Wide Sharing Defaults (programmatic)
+  Process definition consumed by apply_owd.py. Bundle with the recipe.
+  Values use Metadata API enums: ReadWrite | Read | Private | ControlledByParent
+  Method: retrieve CustomObject -> patch ONLY sharingModel/externalSharingModel in *.object-meta.xml
+          -> deploy object-meta.xml files only (no child fields) -> verify via EntityDefinition.
+-->
+<SharingProcess name="AITS_Step0_OWD" apiVersion="67.0" recipeStep="Step 0">
+    <guardrails>
+        <rule>Only objects listed under targets are changed. All other object settings are preserved from the retrieved file.</rule>
+        <rule>Availability-driven: every target is checked against the connected org. Objects not in the org are skipped and reported, never treated as a failure (applies to all rows, not only skipIfAbsent).</rule>
+        <rule>Level 1 = programmatic deploy. Only rows that fail programmatically (or stay mismatched after the recalculation wait) go to Level 2 = browser (browser-fallback.md).</rule>
+        <rule>External access must not be more permissive than Internal - a spec violating this aborts the run (fix the spec; neither deploy nor UI can apply it).</rule>
+        <rule>Access reductions (internal or external, incl. leaving ControlledByParent) are computed at plan time from the retrieved files; deploy requires --confirm after user approval.</rule>
+        <rule>Always retrieve fresh (retrieved-before is cleared); abort if retrieve is not Succeeded.</rule>
+        <rule>Changing Account also changes its ControlledByParent children (Contact, Order, ...). Report them.</rule>
+        <rule>If a deploy fails: isolate the failed objects, redeploy the rest, and send the failed rows to browser fallback. If browser Save fails on rows not in targets, or is rejected for a listed row: STOP and ask the user - never change values on your own (strict scope). Systemic deploy failures (auth, timeout, no component errors) abort instead of falling back.</rule>
+        <rule>Never cancel a DeployRequest created by "Automated Process".</rule>
+    </guardrails>
+
+    <steps>
+        <step order="1" name="snapshotBefore">Query EntityDefinition (InternalSharingModel, ExternalSharingModel) for all target objects; save owd-before.json.</step>
+        <step order="2" name="retrieve">Clear sharing/_work/retrieved-before (script-owned work project), then sf project retrieve start -m CustomObject:&lt;Object&gt; (present objects only, deployAs=self) --output-dir sharing/_work/retrieved-before</step>
+        <step order="3" name="patch">Set sharingModel/externalSharingModel to target values in each object-meta.xml; add externalSharingModel if missing; write to sharing/_work/force-app/main/default/objects/&lt;Object&gt;/ (never the caller's project).</step>
+        <step order="4" name="deploy">Wait (never cancel) while any DeployRequest is in flight, then sf project deploy start --source-dir &lt;each patched object-meta.xml&gt; --async; poll sf project deploy report every 15-30s.</step>
+        <step order="5" name="verify">Re-query EntityDefinition; compare to targets; re-check once after ~2 min if mismatched (sharing recalculation is async). Save owd-after.json.</step>
+        <step order="6" name="fallback">For rows still not at target: follow browser-fallback.md (Setup &gt; Sharing Settings &gt; Edit), then re-run verify.</step>
+        <step order="7" name="report">Write step0-sharing-result.md (before/after/target/status per row) and append to deploy-log.</step>
+    </steps>
+
+    <!-- deployAs: self = deploy this object's file; parent:<Obj> = follows parent row in UI, not deployed separately -->
+    <targets>
+        <target uiLabel="Account and Contract" object="Account"                       internal="ReadWrite" external="Read"      deployAs="self"/>
+        <target uiLabel="Account and Contract" object="Contract"                      internal="ReadWrite" external="Read"      deployAs="parent:Account" note="Contract has no own externalSharingModel; follows Account row"/>
+        <target uiLabel="Product"              object="Product2"                      internal="ReadWrite" external="Read"      deployAs="self"/>
+        <target uiLabel="Catalog"              object="ProductCatalog"                internal="ReadWrite" external="Read"      deployAs="self"/>
+        <target uiLabel="Fulfillment Order"    object="FulfillmentOrder"              internal="ReadWrite" external="Private"   deployAs="self" skipIfAbsent="true"/>
+        <target uiLabel="Inventory Reservation" object="InventoryReservation"         internal="ControlledByParent" external="Private" deployAs="self" skipIfAbsent="true" note="User-approved (2026-10-30). Untested (absent on reference org); if the org rejects it the row goes to browser fallback"/>
+        <target uiLabel="Location"             object="Location"                      internal="ReadWrite" external="ReadWrite" deployAs="self"/>
+        <target uiLabel="Product Attribute Definition" object="ProductAttributeDefinition" internal="ReadWrite" external="Read" deployAs="self"/>
+        <target uiLabel="Product Category Disqualification" object="ProductCategoryDisqual" internal="ReadWrite" external="Read" deployAs="self"/>
+        <target uiLabel="Product Category Qualification" object="ProductCategoryQualification" internal="ReadWrite" external="Read" deployAs="self"/>
+        <target uiLabel="Product Classification" object="ProductClassification"      internal="Read"      external="Read"      deployAs="self"/>
+        <target uiLabel="Product Classification Attribute" object="ProductClassificationAttr" internal="Read" external="Read" deployAs="self"/>
+        <target uiLabel="Product Component Group" object="ProductComponentGroup"      internal="ReadWrite" external="Read"      deployAs="self"/>
+        <target uiLabel="Product Component Group Override" object="ProductComponentGrpOverride" internal="ReadWrite" external="Read" deployAs="self"/>
+        <target uiLabel="Product Configuration Flow" object="ProductConfigurationFlow" internal="ReadWrite" external="Read"     deployAs="self"/>
+        <target uiLabel="Product Configuration Flow Parameter" object="ProductConfigFlowParameter" internal="ReadWrite" external="ReadWrite" deployAs="self"/>
+        <target uiLabel="Product Item"         object="ProductItem"                   internal="ReadWrite" external="Read"      deployAs="self" skipIfAbsent="true"/>
+        <target uiLabel="Product Item Additional Transaction" object="ProductItemTransaction" internal="ReadWrite" external="Read" deployAs="self" skipIfAbsent="true" note="API name unverified (RC-4)"/>
+        <target uiLabel="Product Related Component Override" object="ProductRelComponentOverride" internal="ReadWrite" external="Read" deployAs="self"/>
+        <target uiLabel="Product Transfer"     object="ProductTransfer"               internal="Read"      external="Read"      deployAs="self" skipIfAbsent="true"/>
+        <target uiLabel="Service Catalog Request" object="SvcCatalogRequest"          internal="ReadWrite" external="Read"      deployAs="self"/>
+        <target uiLabel="Service Request"      object="ServiceRequest"                internal="ReadWrite" external="ReadWrite" deployAs="self"/>
+        <target uiLabel="Shipment"             object="Shipment"                      internal="ReadWrite" external="ReadWrite" deployAs="self" skipIfAbsent="true"/>
+        <target uiLabel="Asset"                object="Asset"                         internal="ControlledByParent" external="ControlledByParent" deployAs="self" note="User decision 2026-10-30: keep Asset following Account. EntityDefinition reports the inherited Account values; the retrieved object-meta.xml is the source of truth"/>
+    </targets>
+
+    <!-- Informational only: objects that inherit from Account (ControlledByParent). Not changed by this step; before/after reported so cascades are visible. -->
+    <inherited parent="Account">
+        <object name="Contact"/>
+        <object name="Order"/>
+        <object name="Asset"/>
+    </inherited>
+</SharingProcess>

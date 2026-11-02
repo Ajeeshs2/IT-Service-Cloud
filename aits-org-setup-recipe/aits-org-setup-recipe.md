@@ -1,6 +1,10 @@
 # AITS Org Setup Recipe
 
-Automated setup of an AITS (Agentforce IT Services) org when a Salesforce org is connected via MeshMesh. Covers programmatic phases (Phases 1–9, 12) and browser/manual steps (Steps 0–3c, 6–15) for: permission audit, Data Cloud, Incident/Problem/Change/Release Management, Knowledge, Unified Catalog, Assignment Rules, Agentforce agent creation/activation, Experience Cloud site, Data Library, Enhanced Chat, Embedded Messaging, and SLA Management.
+**Recipe version 2.0 — 2026-11-02** — successor to the "IT Service Cloud Setup Recipe" (version 1), which remains available unchanged.
+
+**Bundle (scripts and specs):** public GitHub repository `https://github.com/Ajeeshs2/IT-Service-Cloud`, folder `aits-org-setup-recipe/`, tag `v2.0`. Before running, get the bundle: `git clone --branch v2.0 https://github.com/Ajeeshs2/IT-Service-Cloud.git && cd IT-Service-Cloud/aits-org-setup-recipe` — all commands in this recipe run from that folder (keep the checks/, settings/, sharing/ layout). Version 1 is also tag `v1.0`.
+
+Automated setup of an AITS (Agentforce IT Services) org when a Salesforce org is connected via MeshMesh. Covers a read-only pre-flight audit, then feature-driven phases run only when selected: 0 IT Service Enablement (gate), Step 0 Sharing, 1a–1e IT Service Core, 3a–3e Agentforce, 4a–4c Unified Catalog, 5a–5c SLA Management, 6a–6c Assignment Rules, 7a–7b Knowledge, 8a–8c Self-service portal, 9a–9d Data Cloud (always last), 10a–10c Embedded chat, 11a–11c CMDB & Service Graph. Settings, sharing and permission changes run through the bundled scripts (`settings/`, `sharing/`); read-only checks live in `checks/`.
 
 ---
 
@@ -21,14 +25,37 @@ Automated setup of an AITS (Agentforce IT Services) org when a Salesforce org is
 
 **Ask the user:** "Do you want to enable Data Cloud? If yes, we'll deploy it as the LAST programmatic phase so its background provisioning doesn't interfere with other deploys."
 
-* If **yes**: Run Phase 2 (Data Cloud) **last** — after all other programmatic phases (3–9, 12) are complete. The Data Cloud settings deploy triggers a background `InstalledPackage` deploy by "Automated Process" that installs the `ssot` (Salesforce Standard Data Model) package. This takes \~10–30 minutes and **cannot be cancelled or re-triggered from the UI without the run failing and then retriggering provision**. By deploying Data Cloud last, there is no risk of it being accidentally cancelled when clearing a stuck deploy queue. Steps 11 and 12 (Data Library) depend on Data Cloud being fully provisioned.
-* If **no**: Skip Phase 2 entirely. Also skip Step 11 (Create Data Library) and Step 12 (Connect Data Library to Agents) — these require Data Cloud.
+* If **yes**: Run Data Cloud (Phases 9a–9d) **last** — after all other programmatic phases are complete. The Data Cloud settings deploy triggers a background `InstalledPackage` deploy by "Automated Process" that installs the `ssot` (Salesforce Standard Data Model) package. This takes \~10–30 minutes and **cannot be cancelled or re-triggered from the UI without the run failing and then retriggering provision**. By deploying Data Cloud last, there is no risk of it being accidentally cancelled when clearing a stuck deploy queue. Phase 9d (Data Library) depends on Data Cloud being fully provisioned.
+* If **no**: Skip Phases 9a–9d entirely (9d Data Library requires Data Cloud).
 
 ### 2. Feature Selection
 
 **Ask the user:** "Which features do you want to enable?" Present the following as a checklist — if the user opts out of any, skip the corresponding phases/steps:
 
-| Feature | Phases/Steps | |---|---| | Incident Management | Phase 3, Step 1 (Assignment Rules) | | Knowledge | Phase 4 | | Problem Management | Phase 5 | | Change Management | Phase 6 | | Release Management | Phase 7 | | Unified Catalog | Phase 8 | | Agentforce Agents (IT Employee + Fulfiller) | Phase 12, Steps 6–9 | | Enhanced Chat for IT Service Employee | Step 2, Step 13 | | Self Service Portal (Experience Cloud Site) | Step 10 | | Data Library (requires Data Cloud) | Steps 11–12 | | Embedded Messaging Setup | Step 14 (manual) | | SLA Management for IT Service | Step 15 |
+| Feature | Phases |
+|---|---|
+| Incident Management | 1a |
+| Problem Management (needs Incident) | 1b |
+| Change Management (needs Incident) | 1c |
+| Release Management (needs Change) | 1d |
+| Agentforce Platform | 3a |
+| IT Service Fulfiller agent (needs 3a + Incident) | 3b |
+| IT Employee Assistant incl. Enhanced Chat (needs 3a) | 3c |
+| Proactive Assistant (needs 3b) | 3d |
+| Optional AI features — *optional*, only if named | 3e |
+| Unified Catalog | 4a–4c |
+| SLA Management (5c optional) | 5a–5c |
+| Assignment Rules | 6a–6c |
+| Knowledge | 7a–7b |
+| Self-service portal | 8a–8c |
+| Data Cloud incl. Data Library — always last (9c optional) | 9a–9d |
+| Embedded chat on the portal (10c manual) | 10a–10c |
+| CMDB & Service Graph | 11a–11c |
+
+> **All phases are feature-driven:** only the selected features run; unselected features are never changed. For each run, also ask *all features* vs *required only*. Start every run with the Pre-flight audit — its skip map shows each phase's current state. `--features all` excludes optional phases (3e, 9c).
+
+> **Mandatory, always run:** Phase 0 (IT Service Enablement gate) and Phase 1e (Notification Service).
+
 
 ### 3. Permission Assignment Scope
 
@@ -36,9 +63,11 @@ Automated setup of an AITS (Agentforce IT Services) org when a Salesforce org is
 
 This applies to:
 
-* All Permission Sets and Permission Set Groups from Phases 3–12
-* The custom "Access Agents" Permission Set (Step 9)
-* Queue membership (Step 13)
+* All Permission Sets, Permission Set Groups and licences of the selected phases (1a–1d, 3a, 4c, 6b, 9b)
+* The custom "Access Agents" Permission Set (3b/3c)
+* Queue membership (3c)
+
+No additional PSGs (e.g. ItsmPortalUserPSG, EmployeeHub*, SetupWithAgentforceUserPsg) are audited or assigned (RC-77).
 
 ### 4. Strict Scope — Only Do What the Recipe Says
 
@@ -50,15 +79,35 @@ This applies to:
 * **If you encounter an unchecked toggle or button** that is NOT in the recipe's instructions for the current step, leave it alone. Do not infer that it is a prerequisite or dependency unless the recipe explicitly says so.
 * **If you are unsure** whether something should be enabled, STOP and ask the user before proceeding.
 
+### 5. Availability-Driven Run — Missing Objects Are Never Failures
+
+> **This rule applies to EVERY phase and step.**
+
+Every step checks what exists in the connected org and drives the run from that. Objects/features that are not present are skipped and reported as *not in org* — never as a failure. The run report lists present / at target / changed / skipped / fallback.
+
 ---
 
 ## Recipe Summary
 
-**Programmatic Phases (Phases 1, 3–9, 12, then 2):** Automated via metadata deploy and Salesforce API. These enable org-level features, deploy settings, and assign permissions. **Phase 2 (Data Cloud) MUST be deployed LAST** — it triggers a background package install that occupies the deploy queue for \~10-30 min and cannot be cancelled. (Phases 10–11 were removed from the recipe — Slack and Microsoft Teams integrations are not covered.)
+**How a run works:** Pre-flight audit (read-only skip map) → user selects phases → for each selected phase: check → plan → user approval → apply → verify. Settings, sharing and permission changes are programmatic (Level 1) through the bundled scripts; browser actions (Level 2) are used only where no API exists or a check fails, always with user approval. **Data Cloud (9a) is the LAST programmatic deploy** — it triggers a background package install that occupies the deploy queue for \~10–30 min and must never be cancelled. (Slack and Microsoft Teams integrations are not covered.)
 
-**Browser/Manual Steps (Steps 0–3c, 6–15):** Configuration that requires browser UI or manual action. Some are fully automated via browser, others require user input. (Steps 4–5 were removed from the recipe — Slack and Microsoft Teams channel setup are not covered.)
+| Phase | Method | Description |
+|---|---|---|
+| Pre-flight audit | Read-only script | `checks/preflight.py` — skip map for every phase; runs first, every run |
+| 0 | Check script (+ Browser if OFF) | IT Service Enablement gate — must be ON before any other phase |
+| Step 0 | Programmatic (Level 1) + Browser fallback (Level 2) | Sharing Settings (OWD) |
+| 1a–1e | Settings + permissions scripts | IT Service Core: Incident, Problem, Change, Release, Notification Service (1e mandatory) |
+| 3a–3e | Settings script + agent checks; Browser for the Fulfiller wizard / Enhanced Chat | Agentforce (3e optional) |
+| 4a–4c | Settings + permissions scripts | Unified Catalog |
+| 5a–5c | Check script + Browser | SLA Management (5c optional) |
+| 6a–6c | Settings + permissions scripts + check; Browser fallback | Assignment Rules |
+| 7a–7b | Settings script + check | Knowledge |
+| 8a–8c | Check script + page; create a site only if the user chooses | Self-service portal |
+| 9a–9d | Settings script (LAST) + Browser (9d) | Data Cloud, Data Library (9c optional) |
+| 10a–10c | Checks + manual (10c) | Embedded chat on the portal |
+| 11a–11c | Check script + Browser | CMDB & Service Graph |
 
-| Phase/Step | Method | Description | |---|---|---| | Phase 1 | Programmatic | Permission Set audit (read-only) | | Phase 3 | Programmatic | Incident + Problem + Change Management settings (combined deploy recommended) | | Phase 4 | Programmatic | Knowledge settings (check-first — often already enabled) | | Phase 5 | Programmatic | Problem Management settings (skip if combined in Phase 3) | | Phase 6 | Programmatic | Change Management settings (skip if combined in Phase 3) | | Phase 7 | Programmatic | Release Management settings (batch with Phase 8 recommended) | | Phase 8 | Programmatic | Unified Catalog settings (batch with Phase 7 recommended) | | Phase 9 | Programmatic | Assignment Rules (Context Service + BRE) | | Phase 12 | Programmatic | Agentforce enablement + PS assignment | | **Phase 2** | **Programmatic (LAST)** | **Data Cloud enablement — MUST be last programmatic deploy (triggers \~10-30 min background install by Automated Process that cannot be cancelled)** | | Step 0 | Browser | Configure Sharing Settings (OWD) | | Step 1 | Browser | Assignment Rules for IT Service | | Step 2 | Browser | Enhanced Chat for IT Service Employee | | Step 3 | Browser | CMDB and Service Graph Provisioning | | Step 3c | Programmatic + Browser | Verify Enhanced Chat Messaging Channel | | Step 6 | Programmatic (preferred) / Browser | Verify Agentforce IT Service Agent Templates | | Step 7 | Browser | Create Missing Agents via Wizard | | Step 8 | Programmatic | Activate Agents | | Step 9 | Programmatic | Create & Assign "Access Agents" Permission Set | | Step 10 | Programmatic | Create Experience Cloud Site (Agentic Center) | | Step 11 | Browser | Create Data Library (requires Data Cloud) | | Step 12 | Browser | Connect Data Library to Agents (requires Data Cloud) | | Step 13 | Programmatic | Verify Enhanced Chat Config (Queue/Routing/Flow) | | Step 14 | Manual | Embedded Messaging Setup (help article) | | Step 15 | Browser | SLA Management for IT Service |
+**Old → new numbering:** Phase 1 → Pre-flight audit · Phase 2 → 9a–9b · Phases 3/5/6/7 → 1a/1b/1c/1d · Phase 4 → 7a · Phase 8 → 4a–4c · Phase 9 → 6a–6b · Phase 12 → 3a (PII masking → 9c) · Step 1 → 6c · Step 2 → 3c · Steps 3/3b → 11b/11c · Steps 3c, 6, 13 → `checks/check_agents.py` (3a–3c) · Step 7 → 3b · Steps 8/9 → 3b/3c fixes · Step 10 → 8a–8c · Steps 11/12 → 9d · Step 14 → 10a–10c · Step 15 → 5a–5c.
 
 ---
 
@@ -66,615 +115,111 @@ This applies to:
 
 > These notes capture critical lessons from real executions. Read before running.
 
- 1. **IncidentMgmtSettings is a shared object** — Phases 3, 5, 6 all write to it. Every deploy must include ALL 35+ boolean flags or unset flags revert to `false`. Always read-then-merge the full flag set before deploying.
- 2. **ReleaseMgmtSettings is NOT queryable via Tooling API** — it requires SOAP Metadata API `readMetadata`. However, the access token from `sf org display` may be redacted or contain ANSI escape chars (Unicode 0x1b) that break SOAP XML. **Workaround:** Deploy `enableITSMReleaseMgmt=true` directly without reading first (safe — single flag) or use Python with `re.sub(r'[^\x20-\x7E]', '', token)` to strip non-printable chars.
- 3. **Deploy queue contention** — consecutive deploys can get stuck in `Pending` for 2+ minutes. Always use `--async` + poll with `deploy report`. If stuck >2 min, cancel and resubmit. Batch multiple settings into a single deploy where possible.
+ 1. **IncidentMgmtSettings is shared by Phases 1a, 1b and 1c.** Never hand-build its XML. Use `settings/apply_settings.py` — it retrieves the org's current settings file (Metadata API), changes only spec-listed flags and redeploys the full file, so unlisted flags are preserved. Do not build deploy XML from the Tooling API read (it returns extra, non-deployable fields).
+ 2. **ReleaseMgmtSettings — read via Metadata API retrieve** — ReleaseMgmtSettings is not in the Tooling API; read it with a Metadata API retrieve — the settings script does this (RC-12 verified). No SOAP or token handling needed.
+ 3. **Deploy queue contention** — consecutive deploys can get stuck in `Pending` for 2+ minutes. Always use `--async` + poll with `deploy report`. If stuck >2 min, cancel and resubmit **only your own deploy** — check `DeployRequest.CreatedBy` first and never cancel a deploy created by Automated Process (RC-14). Batch multiple settings into a single deploy where possible.
  4. **Batch permission assignments** — assigning PS/PSGs one-by-one across phases is slow. Collect all assignments and run them in a single batch at the end.
- 5. **User license incompatibilities are expected** — `UnifiedCatalogCommunityUserPsl` fails for System Administrator users (requires Community license). Log these as informational, not errors.
- 6. **Combine ServiceItsmIntelligenceUdd deploys** — IT Fulfiller Agent + 14 Proactive Assistant flags + `enableSvcCtlgApexTemplate` can all go into one deploy to reduce queue contention.
- 7. **Deploy `enableEinsteinGPTDeployPromptTemplatesAsActive`** with Phase 12 (Agentforce), not Phase 4 (Knowledge) — it's needed for agent prompt templates.
+ 5. **User license incompatibilities are expected** — `UnifiedCatalogCommunityUserPsl` may fail for System Administrator users depending on licensing — treat failure as informational (RC-27).
+ 6. **ServiceItsmIntelligenceUdd flags belong to features** — each flag is owned by exactly one phase (3b/3c/3d/3e, 4b). The settings script combines all selected features that share a settings file into one deploy.
+ 7. **Deploy `enableEinsteinGPTDeployPromptTemplatesAsActive`** with Phase 3a (Agentforce Platform), not Phase 7a (Knowledge) — it's needed for agent prompt templates.
  8. **API version 67.0 required for ServiceItsmIntelligenceUdd** — Deploying with API v63.0 fails with "Not available for deploy for this API version". All AITS settings packages should use `<version>67.0</version>` in package.xml.
- 9. **⚠️ NEVER cancel "Automated Process" deploys** — When Data Cloud is enabled, Salesforce triggers a background deploy by "Automated Process" to install the `ssot` (Salesforce Standard Data Model) `InstalledPackage`. This deploy takes \~10–30 minutes and **there is no UI or API to re-trigger it if cancelled**. Cancelling it will leave Data Cloud permanently stuck at "In Progress" on the Salesforce Foundations page. If you see an "Automated Process" deploy in the queue, **wait for it to finish** — do NOT cancel it even if it appears to block your deploys. If you have non-Automated-Process deploys stuck in `Pending`, wait for the Automated Process deploy to complete first. To avoid this conflict entirely, **deploy Data Cloud (Phase 2) as the LAST programmatic phase** so the background install runs after all other deploys are done.
+ 9. **⚠️ NEVER cancel "Automated Process" deploys** — When Data Cloud is enabled, Salesforce triggers a background deploy by "Automated Process" to install the `ssot` (Salesforce Standard Data Model) `InstalledPackage`. This deploy takes \~10–30 minutes and **there is no UI or API to re-trigger it if cancelled**. Cancelling it will leave Data Cloud permanently stuck at "In Progress" on the Salesforce Foundations page. If you see an "Automated Process" deploy in the queue, **wait for it to finish** — do NOT cancel it even if it appears to block your deploys. If you have non-Automated-Process deploys stuck in `Pending`, wait for the Automated Process deploy to complete first. To avoid this conflict entirely, **deploy Data Cloud (Phase 9a) as the LAST programmatic phase** so the background install runs after all other deploys are done.
 10. **Connection alias may change between sessions** — The Salesforce org connection alias can change between sessions (e.g. `org-o2wdej` → `org-rrvydk`). Always read the active connection alias from the current task context rather than hardcoding it from a previous session.
 11. **Data Cloud provisioning is NOT visible on Deploy Status page** — The `CustomerDataPlatform.settings` deploy succeeds quickly, but actual Data Cloud provisioning is a background process (\~20-30 min) that does NOT appear as a metadata deploy on the Deploy Status page. Do not look for it there — it runs separately. Steps that depend on Data Cloud (e.g., Data Library) will show "Turn On Data Cloud" until provisioning completes.
 12. **Deploy tracking log is essential** — Maintain a running log of every deploy with: Deploy ID, Phase/Step, Settings included, and Status. This enables quick recovery when deploys get stuck or are canceled — you know exactly what needs to be rerun. Format: `| Deploy ID | Phase | Settings | Status | Notes |`
-13. **FlowDefinitionView doesn't find auto-provisioned routing flows** — The `RouteMsgsItEmpAgent` flow (auto-created by Enhanced Chat setup) exists in the Tooling API `Flow` object but does NOT appear in `FlowDefinitionView`. For Step 13 verification, use the direct Tooling API REST endpoint: `GET /services/data/v67.0/tooling/query?q=SELECT+Id,Definition.DeveloperName,MasterLabel,Status+FROM+Flow+WHERE+Definition.DeveloperName='RouteMsgsItEmpAgent'`
+13. **FlowDefinitionView doesn't find auto-provisioned routing flows** — The `RouteMsgsItEmpAgent` flow (auto-created by Enhanced Chat setup) exists in the Tooling API `Flow` object but does NOT appear in `FlowDefinitionView`. `checks/check_agents.py` (3c) checks this automatically; for manual verification use the direct Tooling API REST endpoint: `GET /services/data/v67.0/tooling/query?q=SELECT+Id,Definition.DeveloperName,MasterLabel,Status+FROM+Flow+WHERE+Definition.DeveloperName='RouteMsgsItEmpAgent'`
 14. **Strict scope — only do what the recipe says** — Browser steps often show pages with multiple toggles, buttons, and features. ONLY interact with the specific UI elements described in each step's Interaction Flow. Do not enable, click, or toggle anything else, even if it appears unchecked or incomplete. If the recipe doesn't say to click it, don't click it. "All features" in the user's feature selection refers to the recipe's feature checklist, not every toggle visible in the Salesforce UI. When in doubt, ask the user.
-15. **PSG auto-assignment eliminates redundant PS and PSL assignments** — When a Permission Set Group (PSG) is assigned to a user, Salesforce automatically assigns all contained Permission Sets AND their required Permission Set Licenses. This means you do NOT need to separately assign individual PSs or PSLs that are bundled inside a PSG. Only 6 standalone PSs (not in any PSG) require explicit assignment: `GenieAdmin`, `GenieUserEnhancedSecurity`, `BRERuntime`, `BREDesigner`, `EinsteinGPTPromptTemplateUser`, `EinsteinGPTPromptTemplateManager`. The `ContextServiceRuntimePsl` and `ContextServiceAdminPsl` PSs are bundled inside the Unified Catalog PSGs (`UnifiedCatalogAdminPsl`, `UnifiedCatalogAgentPsl`) and do NOT need separate assignment — assigning the PSGs in Phase 8 covers them automatically.
-16. **Knowledge settings — check before deploying** — `Knowledge.settings` XML has a complex nested structure (`suggestedArticles` with `Case`/`WorkOrder` sub-elements) that has caused multiple deploy failures. Before attempting to deploy, **always query existing settings first** via `SELECT Metadata FROM KnowledgeSettings LIMIT 1`. If `enableKnowledge` and `enableLightningKnowledge` are already `true`, **skip the Knowledge deploy entirely**. On orgs with ITSM licenses, Knowledge is often already fully configured. This avoids deploy failures from XML structural issues and saves \~5 minutes of retry time.
+15. **PSG auto-assignment eliminates redundant PS and PSL assignments** — When a Permission Set Group (PSG) is assigned to a user, Salesforce automatically assigns all contained Permission Sets AND their required Permission Set Licenses. This means you do NOT need to separately assign individual PSs or PSLs that are bundled inside a PSG. Only 6 standalone PSs (not in any PSG) require explicit assignment: `GenieAdmin`, `GenieUserEnhancedSecurity`, `BRERuntime`, `BREDesigner`, `EinsteinGPTPromptTemplateUser`, `EinsteinGPTPromptTemplateManager`. The `ContextServiceRuntimePsl` and `ContextServiceAdminPsl` PSs are bundled inside the Unified Catalog PSGs (`UnifiedCatalogAdminPsl`, `UnifiedCatalogAgentPsl`) and do NOT need separate assignment — assigning the PSGs in Phase 4c covers them automatically.
+16. **Knowledge settings (7a) run through the settings script** — `Knowledge.settings` has a nested `suggestedArticles` structure (`Case`/`WorkOrder` sub-elements) that caused deploy failures when the XML was hand-built. Retrieve-patch-deploy keeps that block exactly as retrieved, which removes the XML-structure failure risk (RC-81).
 17. **Use `sf api request rest` for Connect API calls, not `curl`** — The `sf org display` command returns redacted access tokens (masked with `****`), and `sf org auth show-access-token` may include ANSI escape characters. Both break `curl`-based API calls. Instead, use `sf api request rest` which handles authentication automatically: `sf api request rest '/services/data/v67.0/connect/communities' --method get --target-org <ORG>`. This eliminates all token-handling issues and works reliably for Connect API endpoints (templates, site creation, etc.).
-18. **SLA predefined policies may pre-exist** — Before clicking "Create Predefined Policies" in Step 15, query whether SLA policies already exist: `SELECT Id, Name, SobjectType FROM SlaProcess WHERE SobjectType IN ('Incident','Problem','ChangeRequest')`. If policies exist, the "Create" action may fail or create duplicates. Show existing policies to the user and ask whether to proceed.
-19. **Additional ITSM agents may appear** — The broad discovery query in Step 8 (`WHERE DeveloperName LIKE '%IT%' OR DeveloperName LIKE '%Fulfiller%' OR DeveloperName LIKE '%Employee%'`) may return agents beyond `ItEmployeeAssistant` and `IT_Service_Fulfiller` (e.g. `IT_Service_Employee`). These are auto-provisioned by other features and do not need to be activated or added to the Access Agents permission set. Focus on the two primary agents listed in the recipe.
+18. **SLA predefined policies may pre-exist** — Before clicking "Create Predefined Policies" (phase 5b; `checks/check_sla.py` does this check), query whether SLA policies already exist: `SELECT Id, Name, SobjectType FROM SlaProcess WHERE SobjectType IN ('Incident','Problem','ChangeRequest')`. If policies exist, the "Create" action may fail or create duplicates. Show existing policies to the user and ask whether to proceed.
+19. **Discover the agents — never hard-code names** — the Employee agent = the agent the Enhanced Chat routing flow targets (discover; never hard-code). Other agents such as IT_Service_Employee may or may not exist on an org — ignore them (availability-driven, RC-44). Fulfiller name also discovered from the org.
 20. **Copilot activation limitation** — The `sf agent activate` command only works when run from a valid SFDX project directory (requires `sfdx-project.json`). If you get `InvalidProjectWorkspaceError`, create a minimal `sfdx-project.json` with `{"packageDirectories":[{"path":"force-app","default":true}],"sourceApiVersion":"67.0"}` before running agent activation commands.
 21. **Enhanced Chat toggle — click the container, not the switch** — The "Set Up Enhanced Chat for IT Service Employee" toggle element has shadow DOM click interception. Direct clicks on the toggle switch (`<input type="checkbox">`) are absorbed. To reliably toggle it, click the **parent container element** (typically the `<div>` wrapper 1-2 refs above the switch in the accessibility snapshot). This applies to several Salesforce Go toggle elements that use Lightning `lightning-primitive-input-toggle` components.
-22. **⚠️ Data Cloud MUST be the last programmatic deploy** — The Data Cloud settings deploy (`CustomerDataPlatform.settings`) triggers a background `InstalledPackage` deploy by "Automated Process" that installs the `ssot` package (\~10–30 min). This background deploy occupies the deploy queue. If other deploys are submitted while it runs, they queue behind it — and if an operator cancels the Automated Process deploy to unblock the queue, Data Cloud provisioning is permanently broken (no re-trigger mechanism exists). **Execution order:** Run Phases 3–9, 12 first → then deploy Phase 2 (Data Cloud) last → wait for background provisioning to complete → then proceed with Steps 11–12 (Data Library).
+22. **⚠️ Data Cloud MUST be the last programmatic deploy** — The Data Cloud settings deploy (`CustomerDataPlatform.settings`) triggers a background `InstalledPackage` deploy by "Automated Process" that installs the `ssot` package (\~10–30 min). This background deploy occupies the deploy queue. If other deploys are submitted while it runs, they queue behind it — and if an operator cancels the Automated Process deploy to unblock the queue, Data Cloud provisioning is permanently broken (no re-trigger mechanism exists). **Execution order:** Run all other phases first → then deploy Data Cloud (9a) last → wait for background provisioning to complete → then proceed with Phase 9d (Data Library).
+23. **After any interruption or rejected action, check what already ran** — Long-running, multi-deploy actions are separate, resumable steps. After ANY interruption or rejected action, query `DeployRequest` (Tooling, last 15 min) before continuing — deploys may already have run.
+24. **Sandbox tooling** — jq is not installed in the execution sandbox — parse `--json` output with python3. Pass the org alias literally in every command (shell variables for the org are blocked).
 
 ---
 
-## Phase 1: Permission Set Check (read-only audit)
+## Pre-flight audit (read-only) — runs first, every run
 
-**Purpose:** Verify all required Permission Sets and Permission Set Groups exist in the org before proceeding.
+**Pre-flight audit** — `python3 checks/preflight.py <ORG> [--portal-site <name>]` (read-only, ~2–3 min). Prints a **skip map** — every phase with its state on the connected org and the suggested action — plus org/user and the deploy queue (in-flight deploys listed; never cancel Automated Process). It re-uses the phase checks: Phase 0 gate, settings `status --json` for all features (optional/mandatory tagged), permissions verify for all permission phases, sharing (EntityDefinition vs spec; Controlled-by-Parent rows named for confirmation via apply_owd plan), agents/Enhanced Chat, SLA, Assignment Rules, Knowledge readiness, CMDB, portal, embedded chat (manual 10c), Data Cloud. Writes only `checks/preflight-out/preflight-<ts>.md/.json`; never overwrites phase evidence. The user then selects which phases to run.
 
-**How to check:**
+apply_settings retrieves all settings files in ONE request; during a pre-flight, read-only `status` calls share one cached copy (`AITS_SETTINGS_CACHE`, honoured in status mode only — plan/deploy always retrieve fresh).
 
-1. Query all required Permission Sets:
+Hardening: apply_permissions drops AITS_SETTINGS_CACHE for its prerequisite status call; pre-flight removes its temp cache at exit
 
-   ```
-   SELECT Name FROM PermissionSet WHERE IsOwnedByProfile = false AND Name IN (
-     'IncidentManager','IncidentFulfiller','MajorIncidentManager',
-     'ItSrvcIncChgAssocPermSet','ItSrvcIncProbAssocPermSet','ItSrvcIncRelAssocPermSet',
-     'ItSrvcMajIncProposPermSet','ItSrvcIncAssocsRslvPermSet','ItSrvcRelAssocsViewPermSet',
-     'ItSrvcChgAssocsRslvPermSet','ProblemManagerPermSet','ProblemFulfillerPermSet',
-     'ItSrvcProbRiskAcptPermSet','ItSrvcProbRopenPermSet','ItSrvcProbChgAssocPermSet',
-     'ItSrvcProbRelAssocPermSet','ItSrvcProbAssocsRslvPermSet','ItSrvcProbDeletePermSet',
-     'ChangeRequestManagerPermSet','ChangeRequestFulfillerPermSet',
-     'ItSrvcChgRelAssocPermSet','ItSrvcChgDeletePermSet',
-     'ReleaseManagerPermSet','ReleaseGroupPermSet','ItSrvcRelDeletePermSet',
-     'ItsmPortalCommunityUser','EinsteinGPTPromptTemplateUser','EinsteinGPTPromptTemplateManager',
-     'ItSrvcCnfgItmOwnerPermissionSet','ItSrvcCnfgItmReadPermissionSet',
-     'ItSrvcCnfgItmTypManagerPermissionSet','ItSrvcCnfgItmTypReadPermissionSet',
-     'ItSrvcRelRecReadPermissionSet'
-   )
-   ```
+**What the sharing part checks (manual equivalent, reference):**
 
-2. Query all required Permission Set Groups:
-
-   ```
-   SELECT DeveloperName FROM PermissionSetGroup WHERE DeveloperName IN (
-     'IncidentManagerPSG','IncidentFulfillerPSG','MajorIncidentManagerPSG',
-     'ProblemManagerPSG','ProblemFulfillerPSG',
-     'ChangeRequestManagerPSG','ChangeRequestFulfillerPSG',
-     'ReleaseManagerPSG','ReleaseGroupPSG',
-     'UnifiedCatalogAdminPsl','UnifiedCatalogAgentPsl','UnifiedCatalogCommunityUserPsl'
-   )
-   ```
-
-3. Report missing items. If any are missing, the org may not have the correct licenses.
-
-**Sharing Settings Audit:** Query OWD sharing models for every object in the Step 0 target table and compare Internal and External access against it:
+Query OWD sharing models for every object in the Step 0 target table and compare Internal and External access against it:
 
 ```
 SELECT QualifiedApiName, InternalSharingModel, ExternalSharingModel
 FROM EntityDefinition
 WHERE QualifiedApiName IN (
-  'Account','Contract','Asset','ProductCatalog','FulfillmentOrder','Incident',
-  'InventoryReservation','Knowledge__kav','Location','Product2',
+  'Account','Contract','Asset','ProductCatalog','FulfillmentOrder',
+  'InventoryReservation','Location','Product2',
   'ProductAttributeDefinition','ProductCategoryDisqual','ProductCategoryQualification',
   'ProductClassification','ProductClassificationAttr','ProductComponentGroup',
   'ProductComponentGrpOverride','ProductConfigurationFlow','ProductConfigFlowParameter',
   'ProductItem','ProductRelComponentOverride','ProductTransfer',
-  'SvcCatalogRequest','ServiceRequest','Shipment',
-  'BroadcastTopic','BroadcastCommunication','BroadcastCommAudience')
+  'SvcCatalogRequest','ServiceRequest','Shipment')
 ORDER BY QualifiedApiName
 ```
 
-Flag every object whose Internal or External value differs from the Step 0 target table (`ReadWrite` = Public Read/Write, `Read` = Public Read Only, `Private` = Private, `ControlledByParent` = Controlled by Parent) for update in Step 0. Objects missing from the result do not exist in the org — record them as skipped.
+Flag every object whose Internal or External value differs from the Step 0 target table (`ReadWrite` = Public Read/Write, `Read` = Public Read Only, `Private` = Private, `ControlledByParent` = Controlled by Parent) for update in Step 0. Objects missing from the result do not exist in the org — record them as skipped (*not in org*), never as a failure (Guardrail #5).
+
+Asset is usually Controlled by Parent; EntityDefinition reports the inherited Account values — verify with the retrieved object-meta.xml (the script does this automatically).
 
 ---
 
-## Phase 2: Data Cloud (⚠️ DEPLOY LAST — after all other programmatic phases)
+## Phase 0: IT Service Enablement (gate)
 
-**Purpose:** Enable Customer Data Platform in the org.
+**Phase 0 — IT Service Enablement (gate).** Must be ON before any other phase or step.
 
-> **⚠️ CRITICAL: Deploy this phase LAST** — after Phases 3–9, 12 are complete. The Data Cloud settings deploy triggers a background `InstalledPackage` deploy by "Automated Process" that installs the `ssot` (Salesforce Standard Data Model) package. This background deploy takes \~10–30 minutes, occupies the deploy queue, and **cannot be cancelled or re-triggered**. If cancelled, Data Cloud provisioning is permanently stuck. By deploying last, there are no subsequent deploys that could conflict with it.
+**Check (programmatic):** `python3 checks/check_it_service_enablement.py <ORG>` — reads Tooling `SELECT Metadata FROM IncidentMgmtSettings LIMIT 1` → `itServiceEnablement`. Exit 0 = ON → proceed; exit 3 = OFF → turn on first; exit 1 = check failed → read the page.
 
-**Check (Tooling API):**
+**Page:** `/lightning/setup/page/feature/service-cloud-itsm-setup/home?topic=SalesforceGo` — breadcrumb "Salesforce Go > IT Service Enablement"; section **"Turn on IT Service Enablement"** shows **On** when enabled; required sub-step "Manage User Access" (assign IT Service permission sets).
 
-```
-SELECT IsCustomerDataPlatformEnabled FROM CustomerDataPlatformSettings
-```
+The page header badge can say **"In Progress"** even when enabled — it reflects the optional "Unlock Advanced Functionality → Finish in Setup" item. Not a failure; do not click it (strict scope).
 
-**Deploy if not enabled:**
-
-* Settings type: `CustomerDataPlatform`
-* Root element: `CustomerDataPlatformSettings`
-* Flag: `enableCustomerDataPlatform = true`
-
-Settings XML:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomerDataPlatformSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableCustomerDataPlatform>true</enableCustomerDataPlatform>
-</CustomerDataPlatformSettings>
-```
-
-Package.xml member: `CustomerDataPlatform` (type: `Settings`)
-
-Deploy via `--metadata-dir` approach. Provisioning takes **10–30 minutes** in background. After deploying, **do NOT cancel any deploy in the queue** — the "Automated Process" `InstalledPackage` deploy is the Data Cloud `ssot` package being installed. Wait for it to complete before proceeding with Steps 11–12 (Data Library).
-
-**Permission Sets to assign:**
-
-* `GenieAdmin` (Data Cloud Admin)
-* `GenieUserEnhancedSecurity` (Data Cloud User Enhanced Security)
+**If OFF (RC-49, UNTESTED):** If Phase 0 reports OFF: Level 1 is not available (itServiceEnablement is not in the deployable IncidentMgmt settings file) → Level 2 browser: Salesforce Go 'IT Service Enablement' page → Turn on → Confirm, then re-run checks/check_it_service_enablement.py. UNTESTED: confirm on the first org where it is OFF; every later IncidentMgmt deploy preserves the value because the script redeploys the retrieved file.
 
 ---
 
-## Phase 3: Incident Management
-
-**Purpose:** Enable ITSM Incident Management features.
-
-> **⚡ Optimization — Combined Deploy:** Phases 3, 5, and 6 all write to `IncidentMgmtSettings`. Instead of deploying three separate times (which causes \~4-6 min of deploy queue overhead), **combine all three phases into a single deploy**. Read the current settings once, merge ALL flags for Incident + Problem + Change Management, and deploy once. See the combined flag list below.
-
-**Check (Tooling API):**
-
-```
-SELECT Metadata FROM IncidentMgmtSettings LIMIT 1
-```
-
-Verify flags: `enableITSMIncidentMgmt`, `enableIncidentValidations`, `enableAutoClosureOfChildIncident`, `enableEmailToIncident`
-
-**Deploy:**
-
-1. Read current `IncidentMgmtSettings` from Tooling API (`SELECT Metadata FROM IncidentMgmtSettings LIMIT 1`)
-2. **CRITICAL:** The response contains 35+ boolean flags. You must include ALL of them in the deploy XML, setting the required flags to `true` while preserving every other flag's current value. If you omit flags, they revert to `false`.
-3. **Recommended: Set ALL flags for Phases 3+5+6 in one deploy** — in addition to the Phase 3 flags, also set: `enableITSMProblemMgmt`, `enableProblemValidations` (Phase 5), `enableITSMChangeMgmt`, `enableRiskAssessment` (Phase 6). This eliminates two additional deploys and saves \~4-6 minutes.
-4. Write merged XML as `IncidentMgmt.settings`
-5. Package.xml member: `IncidentMgmt` (type: `Settings`)
-6. Deploy via `--metadata-dir` with `--async` flag, then poll with `deploy report`
-
-**Full IncidentMgmtSettings flags reference** (all must be included in every deploy):
-
-```
-enableAiKnowledgeCreation, enableAlertBroadcastType, enableAutoClosureOfChildIncident,
-enableAutoCreationOfProblem, enableChangePriorityMatrix, enableChangePriorityOverride,
-enableChangeRequestValidations, enableChatToIncidentAi, enableChgCnfcltForMaintSchd,
-enableChgCnflctForChgOwner, enableChgCnflctForCnfgItems, enableChgCnflctForMoratSchd,
-enableChgRqstCnflctDetection, enableCnfgItemCopyForRecords, enableDedupE2IncidentAttachment,
-enableEmailBroadcastType, enableEmailToIncident, enableEmailToIncidentAi,
-enableITSMChangeMgmt, enableITSMIncidentMgmt, enableITSMMajorIncParent,
-enableITSMProblemMgmt, enableIncPriorityMatrix, enableIncPriorityOverride,
-enableIncidentMgmt, enableIncidentValidations, enableMiawForRequestorAgent,
-enablePrivilegeAssignment, enableProbPriorityMatrix, enableProbPriorityOverride,
-enableProblemValidations, enableRiskAssessment, enableSaveE2IncidentAttachment,
-enableSiteBannerBroadcastType, enableSlackBroadcastType
-```
-
-**PSGs to assign:**
-
-* `IncidentManagerPSG`
-* `IncidentFulfillerPSG`
-* `MajorIncidentManagerPSG`
-
----
-
-## Phase 4: Knowledge
-
-**Purpose:** Enable Knowledge and Lightning Knowledge.
-
-**Check (Tooling API):**
-
-```
-SELECT Metadata FROM KnowledgeSettings LIMIT 1
-```
-
-Verify: `enableKnowledge = true`, `enableLightningKnowledge = true`
-
-> **⚡ Check-first pattern (see Operational Learning #16):** On ITSM-licensed orgs, Knowledge is often **already fully configured**. If both `enableKnowledge` and `enableLightningKnowledge` are already `true` in the query results, **skip the Knowledge deploy entirely**. The `Knowledge.settings` XML has a complex nested structure (`suggestedArticles` with `Case`/`WorkOrder` sub-elements) that has caused multiple deploy failures. Avoiding an unnecessary deploy saves \~5 minutes and eliminates a common failure point.
-
-**Deploy (only if not already enabled):** Deploy the full Knowledge.settings file with these key settings:
-
-* enableKnowledge: true
-* enableLightningKnowledge: true
-* enableCreateEditOnArticlesTab: true
-* enableExternalMediaContent: true
-* enableKbStandardSharing: true
-* enableKnowledgeArticleTextHighlights: true
-* showArticleSummariesCustomerPortal: true
-* showArticleSummariesInternalApp: true
-* showValidationStatusField: true
-* votingEnabled: true
-* suggestedArticles for Case/WorkOrder: Subject field
-
-⚠️ **Known deploy issue:** The `suggestedArticles` XML element requires precise nesting (`<suggestedArticles><sObjectType>Case</sObjectType><suggestedArticles><fieldName>Subject</fieldName></suggestedArticles></suggestedArticles>`). Incorrect structure causes deploy failures. If the deploy fails on `suggestedArticles`, try deploying without it — the core Knowledge enablement flags are more important.
-
-Settings file: `Knowledge.settings` Package.xml member: `Knowledge` (type: `Settings`)
-
-**Optional Feature — Einstein Knowledge Creation:** Requires deploying two additional settings:
-
-* `EinsteinGpt`: `enableEinsteinGptPlatform = true`, `enableEinsteinGPTDeployPromptTemplatesAsActive = true`
-* `IncidentMgmt`: `enableAiKnowledgeCreation = true`
-
-**Dependencies:** Incident Management must be enabled first.
-
----
-
-## Phase 5: Problem Management
-
-**Purpose:** Enable ITSM Problem Management.
-
-> **⚡ If combined deploy was used in Phase 3:** These flags were already deployed. Verify they are set and skip the deploy. Only run a separate deploy here if Phase 3 did NOT include the Problem Management flags.
-
-**Check (Tooling API):**
-
-```
-SELECT Metadata FROM IncidentMgmtSettings LIMIT 1
-```
-
-Verify: `enableITSMProblemMgmt = true`, `enableProblemValidations = true`
-
-**Deploy (only if not already included in Phase 3 combined deploy):** Same merge pattern as Incident Management — read current IncidentMgmtSettings, merge Problem flags, write `IncidentMgmt.settings`, deploy.
-
-**PSGs to assign:**
-
-* `ProblemManagerPSG`
-* `ProblemFulfillerPSG`
-
-**Dependencies:** Incident Management must be enabled first.
-
----
-
-## Phase 6: Change Management
-
-**Purpose:** Enable ITSM Change Management.
-
-> **⚡ If combined deploy was used in Phase 3:** These flags were already deployed. Verify they are set and skip the deploy. Only run a separate deploy here if Phase 3 did NOT include the Change Management flags.
-
-**Check (Tooling API):**
-
-```
-SELECT Metadata FROM IncidentMgmtSettings LIMIT 1
-```
-
-Verify: `enableITSMChangeMgmt = true`, `enableRiskAssessment = true`
-
-**Deploy (only if not already included in Phase 3 combined deploy):** Same merge pattern — read current IncidentMgmtSettings, merge Change flags, deploy.
-
-**Optional features:**
-
-* `enableChgRqstCnflctDetection` (Change Request Conflict Detection)
-* `enableChangeRequestValidations` (Change Request Validations)
-
-**PSGs to assign:**
-
-* `ChangeRequestManagerPSG`
-* `ChangeRequestFulfillerPSG`
-
-**Dependencies:** Incident Management must be enabled first.
-
----
-
-## Phase 7: Release Management
-
-**Purpose:** Enable ITSM Release Management.
-
-> **⚡ Optimization — Batch with Phase 8:** Phase 7 (ReleaseMgmt) and Phase 8 (IndustriesContext + ServiceItsmIntelligenceUdd) can be combined into a single deploy package containing all three settings files. This eliminates one additional deploy cycle (\~2 min saved). Include `ReleaseMgmt.settings`, `IndustriesContext.settings`, and `ServiceItsmIntelligenceUdd.settings` in the same package.xml with three `<members>` entries.
-
-**Check:** `ReleaseMgmtSettings` is NOT available via the Tooling API. It requires the SOAP Metadata API `readMetadata` call. However, the access token may contain ANSI escape characters that break SOAP XML.
-
-**Recommended approach (direct deploy):** Since ReleaseMgmt has only one relevant flag, deploy directly without reading first:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<ReleaseMgmtSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableITSMReleaseMgmt>true</enableITSMReleaseMgmt>
-</ReleaseMgmtSettings>
-```
-
-**Deploy:**
-
-* Root element: `ReleaseMgmtSettings`
-* Settings file: `ReleaseMgmt.settings`
-* Package.xml member: `ReleaseMgmt` (type: `Settings`)
-
-**Alternative (SOAP read):** If you need to read first, use Python with token cleaning:
-
-```python
-import re
-clean_token = re.sub(r'[^\x20-\x7E]', '', raw_token)  # strip ANSI/non-printable chars
-```
-
-**Optional features:**
-
-* `enableReleaseValidations` (Release Validations)
-* `enableNotifications` (Notification Service — under `ServiceCloudNotificationOrchestrator` settings)
-  * Sub-channels: `enableEmailNotifications`, `enableInAppNotifications`, `enableSlackNotifications`, `enableTeamsNotifications`
-
-**PSGs to assign:**
-
-* `ReleaseManagerPSG`
-* `ReleaseGroupPSG`
-
-**Dependencies:** Change Management must be enabled first.
-
----
-
-## Phase 8: Unified Catalog
-
-**Purpose:** Enable Unified Catalog for Employee Service (Context Definitions + Service Catalog Apex Templates).
-
-**Check (via Metadata API SOAP readMetadata):**
-
-* `IndustriesContext` → `enableContextDefinitions`
-* `ServiceItsmIntelligenceUdd` → `enableSvcCtlgApexTemplate`
-
-**Deploy (up to 2 settings in one package):**
-
-1. If Context Definitions needed:
-
-```xml
-<IndustriesContextSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableContextDefinitions>true</enableContextDefinitions>
-</IndustriesContextSettings>
-```
-
-File: `IndustriesContext.settings`
-
-2. If Service Catalog Apex Templates needed:
-
-```xml
-<ServiceItsmIntelligenceUddSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableSvcCtlgApexTemplate>true</enableSvcCtlgApexTemplate>
-</ServiceItsmIntelligenceUddSettings>
-```
-
-File: `ServiceItsmIntelligenceUdd.settings`
-
-Package.xml members: `IndustriesContext`, `ServiceItsmIntelligenceUdd` (type: `Settings`)
-
-**PSGs to assign:**
-
-* `UnifiedCatalogAdminPsl`
-* `UnifiedCatalogAgentPsl`
-* `UnifiedCatalogCommunityUserPsl`
-
-**Dependencies:** Release Management must be enabled first.
-
----
-
-## Phase 9: Assignment Rules (Context Service + BRE)
-
-**Purpose:** Enable Context Service and Business Rules Engine for IT Service assignment rules.
-
-**Check (via Metadata API SOAP readMetadata):**
-
-```
-IndustriesContext → enableContextDefinitions
-```
-
-**Deploy:**
-
-```xml
-<IndustriesContextSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableContextDefinitions>true</enableContextDefinitions>
-</IndustriesContextSettings>
-```
-
-(May already be enabled by Unified Catalog phase — check first.)
-
-**Permission Sets to assign:**
-
-* `BRERuntime` (Business Rules Engine Runtime) — standalone, not in any PSG
-* `BREDesigner` (Business Rules Engine Designer) — standalone, not in any PSG
-
-**Permission Set Licenses required:**
-
-* `BRERuntime`
-* `BREDesigner`
-
-Assign PSLs first via `PermissionSetLicenseAssign`, then Permission Sets via `PermissionSetAssignment`.
-
-> **Note:** `ContextServiceRuntimePsl` and `ContextServiceAdminPsl` do NOT need separate assignment here — they are bundled inside the Unified Catalog PSGs (`UnifiedCatalogAdminPsl`, `UnifiedCatalogAgentPsl`) assigned in Phase 8. Their required PSLs are also auto-assigned when the PSGs are assigned. See Operational Learning #15.
-
-**Manual step:** BRE Decision Table Access must be toggled manually in Setup.
-
----
-
-## Phase 12: Agentforce
-
-**Purpose:** Enable Agentforce Platform and Einstein Generative AI.
-
-**Check (via Metadata API SOAP readMetadata):**
-
-* `AgentPlatform` → `enableAgentPlatform`
-* `EinsteinGpt` → `enableEinsteinGptPlatform`
-
-**Deploy (3 settings in one package):**
-
-AgentPlatform.settings:
-
-```xml
-<AgentPlatformSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableAgentPlatform>true</enableAgentPlatform>
-</AgentPlatformSettings>
-```
-
-EinsteinGpt.settings:
-
-```xml
-<EinsteinGptSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableEinsteinGptPlatform>true</enableEinsteinGptPlatform>
-    <enableEinsteinGPTDeployPromptTemplatesAsActive>true</enableEinsteinGPTDeployPromptTemplatesAsActive>
-</EinsteinGptSettings>
-```
-
-EinsteinAI.settings:
-
-```xml
-<EinsteinAISettings xmlns="http://soap.sforce.com/2006/04/metadata">
-</EinsteinAISettings>
-```
-
-Deploy with `--wait 20` (timeout 25 min). After deploy, poll up to 20 minutes for provisioning to complete.
-
-**Sub-features (post-enablement — deploy as a single package):**
-
-Deploy IT Fulfiller Agent + all 14 Proactive Assistant flags + `enableSvcCtlgApexTemplate` in ONE `ServiceItsmIntelligenceUdd.settings` file to reduce deploy queue contention:
-
-```xml
-<ServiceItsmIntelligenceUddSettings xmlns="http://soap.sforce.com/2006/04/metadata">
-    <enableSvcCtlgApexTemplate>true</enableSvcCtlgApexTemplate>
-    <enableItSrvcsFulfillerAgent>true</enableItSrvcsFulfillerAgent>
-    <enableProactvAsstforItSrvcs>true</enableProactvAsstforItSrvcs>
-    <enableCheckIncAttrProactvAsst>true</enableCheckIncAttrProactvAsst>
-    <enableIncAsgntProactvAsst>true</enableIncAsgntProactvAsst>
-    <enableIncPrpsRsolSumProactvAsst>true</enableIncPrpsRsolSumProactvAsst>
-    <enableIncRootCseSumProactvAsst>true</enableIncRootCseSumProactvAsst>
-    <enableIncSmlrRecProactvAsst>true</enableIncSmlrRecProactvAsst>
-    <enableIncSrvcPlanProactvAsst>true</enableIncSrvcPlanProactvAsst>
-    <enableIncSummaryProactvAsst>true</enableIncSummaryProactvAsst>
-    <enableProactivAsstForProbm>true</enableProactivAsstForProbm>
-    <enableCheckProbmForAttr>true</enableCheckProbmForAttr>
-    <enableCreaProbmForRootCseSum>true</enableCreaProbmForRootCseSum>
-    <enableSumForProbm>true</enableSumForProbm>
-    <enableAsocSmlrProbToProb>true</enableAsocSmlrProbToProb>
-    <enableProposSumForProbm>true</enableProposSumForProbm>
-</ServiceItsmIntelligenceUddSettings>
-```
-
-**AI Trust PII Masking (requires Data Cloud):** Check: `SELECT Metadata FROM EinsteinAISettings LIMIT 1` → `enableTrustPIIMasking` Flag for manual enablement if Data Cloud is not yet provisioned.
-
----
-
-## Permission Set Assignment Pattern
-
-**Recommended approach:** Batch all assignments into a single script at the end of all deployments, rather than assigning per-phase. This is faster and avoids partial assignment states.
-
-**Step 1: Get the connected user's ID**
-
-```
-SELECT Id FROM User WHERE Username = '<connected-username>'
-```
-
-**Step 2: Batch-query all PS, PSG, and PSL IDs** Query all required IDs in bulk using `IN` clauses. Only standalone PSs (not bundled in any PSG) and their PSLs need explicit assignment — PSGs auto-assign their contained PSs and PSLs.
-
-```
-SELECT Id, Name FROM PermissionSet WHERE Name IN ('GenieAdmin','GenieUserEnhancedSecurity','BRERuntime','BREDesigner','EinsteinGPTPromptTemplateUser','EinsteinGPTPromptTemplateManager') AND IsOwnedByProfile = false
-SELECT Id, DeveloperName FROM PermissionSetGroup WHERE DeveloperName IN ('IncidentManagerPSG','IncidentFulfillerPSG','MajorIncidentManagerPSG','ProblemManagerPSG','ProblemFulfillerPSG','ChangeRequestManagerPSG','ChangeRequestFulfillerPSG','ReleaseManagerPSG','ReleaseGroupPSG','UnifiedCatalogAdminPsl','UnifiedCatalogAgentPsl','UnifiedCatalogCommunityUserPsl')
-SELECT Id, DeveloperName FROM PermissionSetLicense WHERE DeveloperName IN ('BRERuntime','BREDesigner')
-```
-
-**Step 3: Check which are already assigned**
-
-```
-SELECT PermissionSetId FROM PermissionSetAssignment WHERE AssigneeId = '<USER_ID>' AND PermissionSetId IN (...)
-SELECT PermissionSetGroupId FROM PermissionSetAssignment WHERE AssigneeId = '<USER_ID>' AND PermissionSetGroupId IN (...)
-SELECT PermissionSetLicenseId FROM PermissionSetLicenseAssign WHERE AssigneeId = '<USER_ID>' AND PermissionSetLicenseId IN (...)
-```
-
-**Step 4: Assign PSLs first, then PSGs, then standalone PSs**
-
-* Assign PSLs first: Only `BRERuntime` and `BREDesigner` PSLs need explicit assignment (all other PSLs are auto-assigned by PSGs)
-* Assign PSGs next: 12 PSGs covering Incident, Problem, Change, Release, and Unified Catalog (these auto-assign \~40+ PSs and PSLs)
-* Assign standalone PSs last: Only 6 PSs not in any PSG: `GenieAdmin`, `GenieUserEnhancedSecurity`, `BRERuntime`, `BREDesigner`, `EinsteinGPTPromptTemplateUser`, `EinsteinGPTPromptTemplateManager`
-* For PSGs, use `PermissionSetGroupId` instead of `PermissionSetId`
-
-**Complete assignment list across all phases:**
-
-> **PSG auto-assignment:** When a PSG is assigned, Salesforce automatically assigns all its contained Permission Sets and their required Permission Set Licenses. You do NOT need to separately assign individual PSs or PSLs that are bundled inside a PSG. Only standalone PSs (not in any PSG) need explicit assignment. See Operational Learning #15.
-
-| Type | Name | Phase | Notes | |------|------|-------|-------| | PSG | IncidentManagerPSG | 3 | Auto-assigns: IncidentManager, ItSrvcIncChgAssocPermSet, ItSrvcIncProbAssocPermSet, ItSrvcIncRelAssocPermSet, ItSrvcMajIncProposPermSet, ItSrvcIncAssocsRslvPermSet + their PSLs | | PSG | IncidentFulfillerPSG | 3 | Auto-assigns: IncidentFulfiller + related PSs and PSLs | | PSG | MajorIncidentManagerPSG | 3 | Auto-assigns: MajorIncidentManager + related PSs and PSLs | | PSG | ProblemManagerPSG | 5 | Auto-assigns: ProblemManagerPermSet, ItSrvcProbRiskAcptPermSet, ItSrvcProbChgAssocPermSet, etc. + PSLs | | PSG | ProblemFulfillerPSG | 5 | Auto-assigns: ProblemFulfillerPermSet + related PSs and PSLs | | PSG | ChangeRequestManagerPSG | 6 | Auto-assigns: ChangeRequestManagerPermSet, ItSrvcChgRelAssocPermSet, etc. + PSLs | | PSG | ChangeRequestFulfillerPSG | 6 | Auto-assigns: ChangeRequestFulfillerPermSet + related PSs and PSLs | | PSG | ReleaseManagerPSG | 7 | Auto-assigns: ReleaseManagerPermSet, ItSrvcRelDeletePermSet, etc. + PSLs | | PSG | ReleaseGroupPSG | 7 | Auto-assigns: ReleaseGroupPermSet + related PSs and PSLs | | PSG | UnifiedCatalogAdminPsl | 8 | Auto-assigns: ContextServiceAdminPsl, ContextServiceRuntimePsl + their PSLs | | PSG | UnifiedCatalogAgentPsl | 8 | Auto-assigns: ContextServiceRuntimePsl + its PSL | | PSG | UnifiedCatalogCommunityUserPsl | 8 | ⚠️ Requires Community license — will fail for admin users | | PS | GenieAdmin | 2 | Standalone — not in any PSG | | PS | GenieUserEnhancedSecurity | 2 | Standalone — not in any PSG | | PS | BRERuntime | 9 | Standalone — not in any PSG. Requires matching PSL | | PS | BREDesigner | 9 | Standalone — not in any PSG. Requires matching PSL | | PS | EinsteinGPTPromptTemplateUser | 12 | Standalone — not in any PSG | | PS | EinsteinGPTPromptTemplateManager | 12 | Standalone — not in any PSG | | PSL | BRERuntime | 9 | Assign before matching PS | | PSL | BREDesigner | 9 | Assign before matching PS |
-
-**Known user license incompatibilities (informational, not errors):**
-
-* `UnifiedCatalogCommunityUserPsl` — requires Community license, will fail for System Administrator users
-
----
-
-## Deployment Helper Pattern
-
-All settings deployments use the `--metadata-dir` approach:
-
-1. Create temp directory with:
-
-   ```
-   /tmp/deploy-<name>/
-   ├── settings/
-   │   └── <SettingName>.settings    (the XML body)
-   └── package.xml                   (references the settings member)
-   ```
-
-2. Package.xml template:
-
-   ```xml
-   <?xml version="1.0" encoding="UTF-8"?>
-   <Package xmlns="http://soap.sforce.com/2006/04/metadata">
-       <types>
-           <members>SETTING_MEMBER_NAME</members>
-           <name>Settings</name>
-       </types>
-       <version>67.0</version>
-   </Package>
-   ```
-
-3. **Always use `--async`** to submit the deploy, then poll with `deploy report`:
-
-   * Submit: `sf project deploy start --metadata-dir <dir> --target-org <ORG> --async`
-   * Poll: `sf project deploy report --job-id <id> --target-org <ORG>`
-   * Check for `"status": "Succeeded"` or `"status": "Failed"` in JSON response
-
-4. **Queue contention handling:**
-
-   * Salesforce processes one deploy at a time per org
-   * If a deploy sits in `Pending` status for >2 minutes, cancel it (`sf project deploy cancel --job-id <id>`) and resubmit
-   * **Batch multiple settings** into a single deploy where possible (e.g., Phase 8 combines IndustriesContext + ServiceItsmIntelligenceUdd)
-   * Allow 15-30 seconds between polls
-
-5. **Multiple settings in one deploy:** Add multiple `<members>` entries to the same package.xml and include all settings files in the `settings/` directory.
-
----
-
-## Execution Order & Dependencies
-
-```
-Phase 1:  Permission Check + Sharing Settings Audit (no deps)
-Phase 2:  Data Cloud (no deps, runs in parallel — 20-30 min provisioning)
-Phase 3:  Incident + Problem + Change Management (COMBINED deploy — no deps)
-Phase 4:  Knowledge (depends on Phase 3 — check-first, often skip)
-Phase 5:  Problem Management (SKIP if combined in Phase 3)
-Phase 6:  Change Management (SKIP if combined in Phase 3)
-Phase 7+8: Release Mgmt + Unified Catalog (BATCH into one deploy — depends on Phase 3)
-Phase 9:  Assignment Rules / Context Service (no deps)
-Phase 12: Agentforce (no deps, but deploy EARLY — 20 min provisioning)
-```
-
-**Optimized execution order (recommended):**
-
-1. **Phase 1** — Permission audit (fast, no deps)
-2. **Phase 2** — Data Cloud (kick off immediately, 20-30 min background provisioning)
-3. **Phase 12** — Agentforce (kick off early, up to 20 min provisioning) ← **moved earlier**
-4. **Phase 3** — Combined Incident+Problem+Change deploy (single deploy, \~2 min)
-5. **Phase 4** — Knowledge (check-first; often already enabled, skip deploy)
-6. **Phase 7+8** — Release Mgmt + Unified Catalog (batched deploy, \~2 min)
-7. **Phase 9** — Assignment Rules / Context Service
-8. **Permission assignments** — batch all at the end
-9. **Browser steps** — Steps 0, 1, 2, 3, 3c, 6-15 after all deploys complete
-
-**Parallelization:**
-
-* Phase 2 (Data Cloud) and Phase 12 (Agentforce) can run immediately and in parallel with everything — both have long provisioning times, so start early
-* Phases 9 has no dependencies on ITSM phases
-* Combined Phase 3 eliminates the 3→5 and 3→6 sequential dependencies
-* Phase 7+8 batch depends on Phase 3 (Change Management required for Release Management)
-
----
-
-## Error Handling
-
-* **Already enabled:** Always check status before deploying — skip if already complete
-* **Merge pattern:** For IncidentMgmtSettings, always read current metadata first, merge new flags, then deploy. **Include ALL 35+ flags** in every deploy or unset flags revert to `false`
-* **Provisioning delays:** Data Cloud (20-30 min) and Agentforce (up to 20 min) require polling
-* **Manual steps:** CMDB and BRE Decision Table Access cannot be automated — flag for user action
-* **Missing licenses:** If Permission Sets/PSGs don't exist, the org may lack required licenses — stop and inform user
-* **Deploy queue stuck:** If deploy stays in `Pending` for >2 minutes, cancel and resubmit. Batch multiple settings into single deploys to reduce queue contention
-* **SOAP token issues:** Access tokens from `sf org display` may be redacted; tokens from `sf org auth show-access-token` may contain ANSI escape chars (0x1b). Use Python with `re.sub(r'[^\x20-\x7E]', '', token)` to clean tokens for SOAP calls, or skip SOAP reads for single-flag settings like ReleaseMgmt
-* **User license incompatibilities:** `UnifiedCatalogCommunityUserPsl` will fail for System Administrator users — this is expected and should be logged as informational, not as errors
-
----
-
-## Browser Only Steps
-
-> These steps cannot be automated via API or metadata deploy. They must be performed in the Salesforce Setup UI (browser). Execute these after all programmatic phases are complete.
-
-### Step 0: Configure Sharing Settings (Organization-Wide Defaults)
+## Step 0: Configure Sharing Settings (Organization-Wide Defaults)
 
 **Purpose:** Set the Organization-Wide Default (OWD) sharing settings for AITS-related objects so that records are accessible across the organization as needed.
+
+**Execution model — two levels:** Level 1 (programmatic) is the default. Level 2 (browser) is used **only** for the rows listed in the generated `sharing/browser-fallback.md`. Both levels use the same target table below.
+
+### Level 1 — Programmatic (default)
+
+Targets are defined in `sharing/aits-step0-sharing.xml` (bundled with this recipe) and applied by `sharing/apply_owd.py`. The script retrieves each target object's `CustomObject` metadata fresh, patches **only** `sharingModel`/`externalSharingModel`, and deploys the object-meta.xml files only (no fields or list views).
+
+1. `python3 sharing/apply_owd.py <org-alias> plan` — snapshot + fresh retrieve + patch + report. **No org change.**
+2. List all reductions from `plan` output to the user and get approval before `deploy --confirm`.
+3. `python3 sharing/apply_owd.py <org-alias> deploy --confirm` — async deploy. Failed objects are isolated (atomic deploy → failed ones removed, rest redeployed). Rows still mismatched after the ~2 min sharing-recalculation wait are added to `sharing/browser-fallback.md`.
+4. `python3 sharing/apply_owd.py <org-alias> verify`
+
+Exit codes: `0` = all present objects at target; `2` = Level 2 fallback needed (see `sharing/browser-fallback.md`); `1` = abort.
+
+Invalid specs (External more permissive than Internal) abort the run. Systemic deploy failures (auth, timeout, no component errors) abort and are retried after fixing — they do not go to browser fallback.
+
+Absent objects are skipped and reported as *not in org* — never as a failure (Guardrail #5).
+
+Reductions (e.g. RW→Read) may not show in EntityDefinition until sharing recalculation completes (~2 min observed). Re-verify after 2 min before reporting mismatches. (RC-32)
+
+Contract has no own `externalSharingModel`; it follows Account — deploy Account only (RC-34).
+
+### Level 2 — Browser fallback (only rows in `sharing/browser-fallback.md`)
+
+Follow this flow **only** for the rows listed in `sharing/browser-fallback.md`, then run `python3 sharing/apply_owd.py <org-alias> verify`.
 
 **URL:** `/lightning/setup/SecuritySharing/home`
 
 **Page verification:** The page title should show **"Sharing Settings"** with a heading **"Organization-Wide Sharing Defaults"** and an **"Edit"** button next to it.
-
-**Important: Metadata deploy does NOT work for OWD on standard/managed objects.** Deploying `CustomObject` metadata with `sharingModel`/`externalSharingModel` tags may report success but does not actually change the OWD. This step MUST be done via the browser UI.
 
 **Interaction flow:**
 
@@ -685,22 +230,19 @@ Phase 12: Agentforce (no deps, but deploy EARLY — 20 min provisioning)
 3. The page loads an edit form with two columns per object:
    * **Default Internal Access** (first dropdown, labeled `"ObjectName : Default Access"`)
    * **Default External Access** (second dropdown, unlabeled — immediately to the right)
-4. Locate each object and set **both** Internal and External dropdowns as shown below
+4. For each row listed in `sharing/browser-fallback.md`, set **both** Internal and External as shown in the target table below
 5. **Note:** External access cannot be more permissive than Internal access — set Internal first, then External
 
-**Target Organization-Wide Defaults (set every row exactly as shown):**
+**Target Organization-Wide Defaults (reference values — Level 1 applies all present rows, Level 2 only the fallback rows):**
 
 | Object (UI Label) | Default Internal Access | Default External Access | Notes |
 |---|---|---|---|
 | Account and Contract | Public Read/Write | Public Read Only | Single row on the page (covers both Account and Contract) |
-| Asset | Public Read/Write | Public Read Only | |
+| Product | Public Read/Write | Public Read Only | |
 | Catalog | Public Read/Write | Public Read Only | |
 | Fulfillment Order | Public Read/Write | Private | Skip if absent |
-| Incident | Public Read Only | Public Read Only | |
 | Inventory Reservation | Controlled by Parent | Private | Skip if absent |
-| Knowledge | Public Read/Write | Public Read Only | Usually already correct — verify |
 | Location | Public Read/Write | Public Read/Write | |
-| Product | Public Read/Write | Public Read Only | |
 | Product Attribute Definition | Public Read/Write | Public Read Only | |
 | Product Category Disqualification | Public Read/Write | Public Read Only | |
 | Product Category Qualification | Public Read/Write | Public Read Only | |
@@ -717,21 +259,26 @@ Phase 12: Agentforce (no deps, but deploy EARLY — 20 min provisioning)
 | Service Catalog Request | Public Read/Write | Public Read Only | |
 | Service Request | Public Read/Write | Public Read/Write | |
 | Shipment | Public Read/Write | Public Read/Write | Skip if absent |
-| Broadcast Topic | Public Read Only | Public Read Only | |
-| Broadcast Communication | Public Read Only | Public Read Only | |
-| Broadcast Communication Audience | Public Read Only | Public Read Only | |
+| Asset | Controlled by Parent | Controlled by Parent | Follows Account (user decision 2026-10-30, RC-33) |
+
+> ⚠️ Product Classification and Product Classification Attribute targets are Public Read Only internally. On orgs where they are currently Public Read/Write this *reduces* internal access — confirm with the user before saving. (RC-21)
+
+**Inventory Reservation:** Untested — the object was absent on the reference org. If the deploy rejects this combination, the row goes to the Level 2 browser fallback list.
+
+**Account children:** Changing Account also changes its Controlled-by-Parent children (Contact, Order, Asset). E.g. Account External Private→Public Read Only widens Contact and Order external access. `plan` and `verify` report these inherited objects before/after; no extra confirmation is needed (RC-39).
 
 **Objects that may be absent (skip if not in the list):**
 
 | Object (UI Label) | Notes |
 |---|---|
-| Fulfillment Order, Inventory Reservation, Product Item, Product Item Additional Transaction, Product Transfer, Shipment | Require Field Service / Order Management. Not present on orgs without those features — skip and note which were skipped in the run report. |
+| Fulfillment Order, Inventory Reservation, Product Item, Product Item Additional Transaction, Product Transfer, Shipment | Require Field Service / Order Management. Not present on orgs without those features — skip and report them as *not in org* (never a failure, Guardrail #5). |
 | Product Configuration Section | May not exist — skip if not in the dropdown list |
 
 6. After setting all dropdowns, scroll to the top or bottom and click **"Save"**
-7. If the save fails with validation errors, look for the error messages — they typically indicate objects where Internal = `Controlled by Parent` but External = `Private` (a pre-existing org issue). Fix those by setting External to `Controlled by Parent` to match Internal, then save again.
+7. If the save fails with validation errors on objects NOT in the target table, STOP and show the errors to the user. Only change those rows after explicit user approval (Guardrail #4 — strict scope). Log which rows were changed.
+8. If Save is rejected for a row listed in `sharing/browser-fallback.md`, STOP and ask the user — do not change values.
 
-**Known pre-existing validation issues (may vary by org):** When saving, the page may flag errors on objects unrelated to AITS (e.g., Compliance Control Version, Compliance Policy Version, Regulation Version, Validation Procedure Version). These have `Controlled by Parent` internally but `Private` externally, which is invalid. Set their External access to `Controlled by Parent` to resolve.
+**Known pre-existing validation issues (may vary by org):** When saving, the page may flag errors on objects unrelated to AITS (e.g., Compliance Control Version, Compliance Policy Version, Regulation Version, Validation Procedure Version) that have `Controlled by Parent` internally but `Private` externally. Do **not** fix these automatically — STOP, show the errors to the user, and change them only with explicit approval (step 7).
 
 **Expected result after save:**
 
@@ -746,19 +293,20 @@ Phase 12: Agentforce (no deps, but deploy EARLY — 20 min provisioning)
 SELECT QualifiedApiName, InternalSharingModel, ExternalSharingModel
 FROM EntityDefinition
 WHERE QualifiedApiName IN (
-  'Account','Contract','Asset','ProductCatalog','FulfillmentOrder','Incident',
-  'InventoryReservation','Knowledge__kav','Location','Product2',
+  'Account','Contract','Asset','ProductCatalog','FulfillmentOrder',
+  'InventoryReservation','Location','Product2',
   'ProductAttributeDefinition','ProductCategoryDisqual','ProductCategoryQualification',
   'ProductClassification','ProductClassificationAttr','ProductComponentGroup',
   'ProductComponentGrpOverride','ProductConfigurationFlow','ProductConfigFlowParameter',
   'ProductItem','ProductRelComponentOverride','ProductTransfer',
-  'SvcCatalogRequest','ServiceRequest','Shipment',
-  'BroadcastTopic','BroadcastCommunication','BroadcastCommAudience'
+  'SvcCatalogRequest','ServiceRequest','Shipment'
 )
 ORDER BY QualifiedApiName
 ```
 
 Compare each row to the target table above using these API values: Public Read/Write = `ReadWrite`, Public Read Only = `Read`, Private = `Private`, Controlled by Parent = `ControlledByParent`. A missing row means the object does not exist in the org (expected for the "skip if absent" objects). Product Item Additional Transaction is not in the query — verify it visually on the Sharing Settings page.
+
+Rows whose target is Controlled by Parent (Asset; Inventory Reservation internal) show the parent's values in EntityDefinition. Verify them from the retrieved object-meta.xml; `apply_owd.py verify` does this automatically (RC-47).
 
 **UI-to-API name mapping:**
 
@@ -768,9 +316,7 @@ Compare each row to the target table above using these API values: Public Read/W
 | Asset | Asset |
 | Catalog | ProductCatalog |
 | Fulfillment Order | FulfillmentOrder (unverified — absent in reference org) |
-| Incident | Incident |
 | Inventory Reservation | InventoryReservation (unverified — absent in reference org) |
-| Knowledge | Knowledge__kav |
 | Location | Location |
 | Product | Product2 |
 | Product Attribute Definition | ProductAttributeDefinition |
@@ -789,321 +335,211 @@ Compare each row to the target table above using these API values: Public Read/W
 | Service Catalog Request | SvcCatalogRequest |
 | Service Request | ServiceRequest |
 | Shipment | Shipment (unverified — absent in reference org) |
-| Broadcast Topic | BroadcastTopic |
-| Broadcast Communication | BroadcastCommunication |
-| Broadcast Communication Audience | BroadcastCommAudience |
 
 **Note:** "Catalog" on the Sharing Settings page is `ProductCatalog`. `SvcCatalogItemDef` is a different object (Service Catalog Item Definition) and is not part of this step.
 
-### Step 1: Assignment Rules for IT Service
+**Observed behavior on this org (it-service-cloud-bha853):** Asset was decoupled from Account during the 2026-10-30 run and is kept at Public Read/Write / Public Read Only by user choice (no revert). This org is a documented exception to the recipe default (Controlled by Parent / Controlled by Parent, RC-33), so `verify` here reports Asset as an **expected mismatch**.
 
-**Purpose:** Enable Context Service and BRE Decision Table Access for IT Service assignment rules.
+---
 
-> **⚡ Auto-complete behavior:** After Phase 9 deploys Context Service (`enableContextDefinitions`), the "Context Service" sub-step on this page auto-completes to ✅. Only "BRE Decision Table Access" typically requires manual action. If you visit this page after Phase 9 and see all sub-steps showing ✅ Complete, **no action is needed** — skip this step entirely.
+## IT Service Core (Phases 1a–1e — feature-driven)
 
-**URL:** `/lightning/setup/page/feature/service-cloud-itsm-assignment-rules/home?topic=SalesforceGo`
+**IT Service Core** features are shown to the user as phases and run only if selected: **1a Incident Management**, **1b Problem Management** (needs Incident), **1c Change Management** (needs Incident), **1d Release Management** (needs Change). Phase 0 (IT Service Enablement) is always first. Show the current state with `settings/apply_settings.py <ORG> status`, ask the user which phases to deploy (and *all features* vs *required only* per run), then `plan --features <ids>` → user approval → `deploy --features <ids> --confirm` → `verify`. Unselected features are never changed. Selected features in the same Salesforce settings file (Incident/Problem/Change share IncidentMgmt) are combined into one deploy automatically. A selected feature whose prerequisite is neither selected nor already ON aborts the run with a message; Release is re-checked against the org after the IncidentMgmt deploy.
 
-**Page verification:** The breadcrumb at top should show **"Salesforce Go > Assignment Rules for IT Service"**. If it does not, stop and verify you have the correct URL and org.
+The first deploy is a single try with all selected flags (normal case = 1 deploy per file). On failure, flags are isolated per feature in dependency order (Incident → Problem/Change → Release), splitting only inside a feature; a feature whose prerequisite core flag is not ON is marked "not applied — prerequisite X is not ON" and never deployed; the optional retry skips those flags. Cap = 3·ceil(log2 n)+1 plus 1 per feature in the file.
 
-**What you'll see:**
+Phase **1e Notification Service** is mandatory and joins every run (RC-85).
 
-* Header: "Assignment Rules for IT Service"
-* A "Turn on Assignment Rules for IT Service" card with sub-steps
-* Progress indicator showing completion status (e.g. "1 of 3 Steps Completed")
+1. `python3 settings/apply_settings.py <org-alias> status` — phases + current state (read-only)
+2. Ask the user which phases to deploy (`incident`, `problem`, `change`, `release` or `all`) and *all features* vs *required only* (`--required-only`)
+3. `python3 settings/apply_settings.py <org-alias> plan --features <ids> [--required-only]` — fresh retrieve + diff (no org change)
+4. `python3 settings/apply_settings.py <org-alias> deploy --features <ids> --confirm` — only after the user approves the plan (once per run)
+5. `python3 settings/apply_settings.py <org-alias> verify --features <ids>`
 
-**Sub-steps on the page:**
+**Numbering:** Phases 1a / 1b / 1c / 1d were previously numbered Phase 3 / 5 / 6 / 7.
 
-1. **Turn on Assignment Rules** — Contains two sub-tasks:
-   * **Context Service** — May already show ✅ (auto-enabled from Phase 9 deploy)
-   * **BRE Decision Table Access** — Must be enabled manually in Setup UI
+**Script rules (all settings phases):**
 
-**Interaction flow:**
+* Prerequisites — (1) flag-level `requiresFeature` counts a selected prerequisite only if its core is in the same file (re-checked per feature during isolation) — a core in an earlier file must already be ON in the org; (2) between files, features whose prerequisite did not turn ON are excluded from later files even when the file also holds unblocked features (e.g. Fulfiller when Incident failed, 3e when the platform failed); (3) blocking is transitive (Proactive Assistant blocked when the Fulfiller is blocked). Blocked flags are reported "not applied — prerequisite … is not ON"; exit 2.
+* Exit codes — If a later settings file's prerequisite failed (e.g. Release when Change core failed), its flags are marked "not applied — prerequisite … is not ON", its result file is still written, the run continues and exits 2 (report, don't fail — RC-44); exit 1 is reserved for systemic problems, bad input or prerequisites missing before start.
+* `--features all` — feature attribute `optional="true"` (3e); `all` = every non-optional feature; optional phases run only when named; status marks them [optional]
+* Status / permissions — `apply_settings.py status --json [--features <ids>]` gives machine-readable feature state (retrieves only the needed files); `apply_permissions.py` reads prerequisites from it instead of scraping text (fails closed); `plan/deploy --features all` prints a NOTE that 4c is a permissions phase run by `apply_permissions.py`; PSG status is shown per row and a non-"Updated" PSG is warned about before assignment.
+* Safety — with_flags() asserts each managed flag appears exactly once in the retrieved settings XML; otherwise the run aborts ("refusing to patch; fix the spec") — protects against nested same-name booleans (Knowledge.settings has 5 nested booleans today, none managed).
 
-**Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
+**Permissions (RC-77):** Each feature phase lists its permission set groups in the spec (`<permissions feature=…>`): Incident (IncidentManagerPSG, IncidentFulfillerPSG, MajorIncidentManagerPSG), Problem (ProblemManagerPSG, ProblemFulfillerPSG), Change (ChangeRequestManagerPSG, ChangeRequestFulfillerPSG), Release (ReleaseManagerPSG, ReleaseGroupPSG), Unified Catalog 4c (3 UC PSGs). They are assigned to the connected user with `settings/apply_permissions.py <ORG> plan|deploy --confirm|verify --features <ids>` — only for selected phases; absent PSGs skipped; rejections reported. No additional PSGs (e.g. ItsmPortalUserPSG, EmployeeHub*, SetupWithAgentforceUserPsg) are audited or assigned.
 
-1. Navigate to the URL above
-2. Look for the "Turn on Assignment Rules for IT Service" section
-3. If status shows "Complete" for both Context Service and BRE Decision Table Access → no action needed
-4. If BRE Decision Table Access shows ⏳ Pending or ❌ Error:
-   * Look for a **"Try Again"** button on the page
-   * Click **"Try Again"**
-   * A confirmation dialog will appear asking to confirm the action
-   * Click **"Confirm"** in the dialog
-5. Wait for both sub-steps to show ✅ (typically completes within 5-10 seconds)
+**Feature ownership of shared IncidentMgmt flags:**
 
-**Expected result:**
+| Feature | Flags owned |
+|---|---|
+| Incident (1a) | core/validations/auto-close/Email-to-Incident (+AI, save, de-dup attachments)/Chat-to-Incident AI/major incident parent/requestor messaging/AI Knowledge creation/copy configuration items/privilege assignment/broadcasts (site banner, alert, email; Slack not managed) and Incident priority matrix+override |
+| Problem (1b) | core/validations/auto-create Problem/Problem priority matrix+override |
+| Change (1c) | core/risk assessment/validations/conflict detection + 4 conflict checks/Change priority matrix+override |
+| Release (1d) | all 3 ReleaseMgmt flags |
 
-* Context Service: ✅ Success
-* BRE Decision Table Access: ✅ Success
-* Progress: 100% (or "Step Completed")
-* Toast notification: **"Assignment Rules for IT Service was turned on and is ready to configure"**
+**Observed behavior on this org:** it-service-cloud-bha853: user selected all IT Service Core features (Incident/Problem/Change = all flags, Release = all 3, user-requested). `status` shows all four phases ON. Notification Service (1e) deployed (3 flags).
 
-**Troubleshooting:**
+---
 
-* If "Try Again" doesn't appear, the page may show a **"Turn On"** button instead — click that
-* If the step fails repeatedly, verify that the Context Service PSL and BRE PSLs are assigned to the user (Phase 9 permissions)
-* If the page shows "Feature not available", the org may lack the required ITSM licenses
+## Phase 1a: Incident Management (formerly Phase 3)
 
-### Step 2: Set Up Enhanced Chat for IT Service Employee
+**Purpose:** Enable ITSM Incident Management features.
 
-**Purpose:** Enable Omni-Channel and Enhanced Chat for IT Service Employee agents. This turns on persistent messaging so Agentforce agents can answer employee questions for IT troubleshooting, service requests, and incident tracking.
+**Check (Tooling API):**
 
-**URL:** `/lightning/setup/page/feature/service-cloud-agentforce-for-itsm/home?topic=SalesforceGo`
+```
+SELECT Metadata FROM IncidentMgmtSettings LIMIT 1
+```
 
-**Page verification:** Breadcrumb should show **"Salesforce Go > Agentforce for IT Service"**. The page header should read **"Agentforce for IT Service"** with description "Empower employees to self-serve or create incidents with Agentforce..."
+Verify flags: `enableITSMIncidentMgmt`, `enableIncidentValidations`, `enableAutoClosureOfChildIncident`, `enableEmailToIncident`
 
-**What you'll see on the page:**
+**Deploy (Level 1 — programmatic, XML process):**
 
-* **Turn on Agentforce** section (should already show "On" with ✅ Success for Agentforce Studio)
-* **Enable IT Service Agent Templates** section with three sub-options:
-  * IT Service Employee (toggle) — ⛔ DO NOT TOUCH. Do not enable this toggle. It is NOT part of this recipe.
-  * IT Service Fulfiller (toggle — may already be checked ✅ from Phase 12) — ⛔ DO NOT TOUCH. Already handled programmatically in Phase 12.
-  * **Set Up Enhanced Chat for IT Service Employee** (toggle — ✅ this is the ONLY toggle to enable in this step)
-* **Enable Specialized IT Service Agent Templates** section (separate, below) — ⛔ DO NOT TOUCH. Do not enable any toggles in this section. It is NOT part of this recipe.
+Phase 1a uses `settings/aits-itsm-settings.xml` + `settings/apply_settings.py <ORG> status|plan|deploy|verify --features incident` (see "IT Service Core" above). The script retrieves the org's current IncidentMgmt settings (Metadata API — the deployable 35 flags), sets only spec-listed flags to target, preserves everything else, deploys async, and isolates failing flags per feature in dependency order, splitting only inside a feature (failed flags are reported, the rest is applied; RC-68). Target = ALL flags of the selected features true except those marked manage=false (only tier="required" flags with `--required-only`).
 
-**Interaction flow:**
+1. `python3 settings/apply_settings.py <org-alias> plan --features incident` — fresh retrieve + diff (no org change)
+2. `python3 settings/apply_settings.py <org-alias> deploy --features incident --confirm` — only after the user approves the `plan` output from step 1 (once per run); isolates failing flags; verify
+3. `python3 settings/apply_settings.py <org-alias> verify --features incident`
 
-**⚠️ CRITICAL: On this page, ONLY enable the "Set Up Enhanced Chat for IT Service Employee" toggle. Do NOT enable "IT Service Employee", "IT Service Fulfiller", or "Specialized Agent Templates for Employee" toggles — those are either handled programmatically in other phases or are not part of this recipe.**
+Exit codes: `0` = all present flags at target; `2` = some flags dropped (see `settings/IncidentMgmt-result.md`); `1` = abort.
 
-1. Navigate to the URL above
-2. Scroll down to find **"Set Up Enhanced Chat for IT Service Employee"** under the "Enable IT Service Agent Templates" section
-3. Click the **Enable/Disable Feature** toggle switch next to it
-   * **Note:** The switch element itself may be intercepted by a parent container — click the container/label area around the toggle if the switch doesn't respond directly
-4. A confirmation dialog appears: **"Turn on Set Up Enhanced Chat for IT Service Employee?"**
-   * Dialog message: "It takes a few minutes to turn on this feature for you. When it's ready, you can configure settings and give users access."
-5. Click **"Confirm"**
-6. **Do NOT wait for completion** — this step provisions Omni-Channel and related configuration, which can take several minutes in the background
+`deploy` requires `--confirm` — the user approves the `plan` output once per run (flags to change, any true→false reductions, worst-case deploy count). Failing flags are isolated by splitting the batch; a half already known to fail (its sibling succeeded) is split without re-deploying it. The run is capped at `3 × ceil(log2 n) + 1` deploys for n changed flags (n=5 → 10, 12 → 13, 23 → 16, 35 → 19), plus 1 per feature in the file (RC-68), which fully isolates up to 2 failing flags. Normal case = 1 deploy. If the cap is reached the run stops cleanly: applied flags stay, the rest are listed as *not attempted*, exit 2; continuing = fresh `plan` + one new approval. Optional `--retry-failed` re-tries isolated failures once (flag-order dependencies).
 
-**Expected result after confirming:**
+Each deploy is logged immediately to `settings/<Setting>-deploy-log.jsonl` (on submit and on finish). On interrupt (SIGINT/SIGTERM) the script finishes the current poll and submits nothing new.
 
-* The toggle shows as checked/enabled
-* Background provisioning begins (Omni-Channel setup, messaging configuration)
-* The page may show progress indicators or sub-steps appearing under the section
-* A toast notification may appear confirming the feature was turned on
+Flags with `requires=` (e.g. Slack broadcasts) are skipped as *not available* unless `--assume-available` (availability-driven, Guardrail #5 / RC-44).
 
-**Troubleshooting:**
+**Slack broadcasts:** Do not manage `enableSlackBroadcastType` (Slack is out of scope for this recipe). Spec marks it manage="false"; the org value is preserved.
 
-* If the toggle doesn't respond to clicks, try clicking the **parent container element** (1-2 refs above the switch in the accessibility snapshot) rather than the switch element itself — see Operational Learning #21 about shadow DOM click interception on Lightning toggle components
-* If provisioning fails, return to the page later and look for a "Try Again" button (similar to Assignment Rules pattern)
-* This feature requires Agentforce to already be turned on (the "Turn on Agentforce" section must show "On")
+**Full IncidentMgmtSettings flags reference** (reference only — execution goes through the script above, which retrieves and patches the org's settings; do not build deploy XML from this list):
 
-### Step 3: CMDB and Service Graph Provisioning
+```
+enableAiKnowledgeCreation, enableAlertBroadcastType, enableAutoClosureOfChildIncident,
+enableAutoCreationOfProblem, enableChangePriorityMatrix, enableChangePriorityOverride,
+enableChangeRequestValidations, enableChatToIncidentAi, enableChgCnfcltForMaintSchd,
+enableChgCnflctForChgOwner, enableChgCnflctForCnfgItems, enableChgCnflctForMoratSchd,
+enableChgRqstCnflctDetection, enableCnfgItemCopyForRecords, enableDedupE2IncidentAttachment,
+enableEmailBroadcastType, enableEmailToIncident, enableEmailToIncidentAi,
+enableITSMChangeMgmt, enableITSMIncidentMgmt, enableITSMMajorIncParent,
+enableITSMProblemMgmt, enableIncPriorityMatrix, enableIncPriorityOverride,
+enableIncidentMgmt, enableIncidentValidations, enableMiawForRequestorAgent,
+enablePrivilegeAssignment, enableProbPriorityMatrix, enableProbPriorityOverride,
+enableProblemValidations, enableRiskAssessment, enableSaveE2IncidentAttachment,
+enableSiteBannerBroadcastType, enableSlackBroadcastType
+```
 
-**Purpose:** Provision CMDB (Configuration Management Database) and Service Graph to enable configuration item tracking for IT Service Management.
+**Permissions (RC-77):** `settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features incident` assigns IncidentManagerPSG, IncidentFulfillerPSG, MajorIncidentManagerPSG to the connected user (only when selected; absent PSGs skipped; rejections reported).
 
-**URL:** `/lightning/setup/CMDBProvisionalSettings/home`
+---
 
-**Page verification:** The main content area should show **"CMDB and Service Graph Provisioning Settings"** with description "View the current provisioning status of CMDB and service graph, start or retry provisioning..."
+## Phase 1b: Problem Management (formerly Phase 5)
 
-**What you'll see on the page:**
+**Purpose:** Enable ITSM Problem Management.
 
-* **Provisioning Status** card showing:
-  * Status: `Unprovisioned` / `Provisioned` / `In Progress`
-  * Last Run On / Last Run By / Job Status
-* **CMDB Provisioning** card with two provisioning stages:
-  * Step 1: Licenses Applied
-  * Step 2: CMDB Services Enabled
-* A **"Provision CMDB"** button (if not yet provisioned or if previous attempt failed)
+**Check (Tooling API):**
 
-**Interaction flow:**
+```
+SELECT Metadata FROM IncidentMgmtSettings LIMIT 1
+```
 
-**Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
+Verify: `enableITSMProblemMgmt = true`, `enableProblemValidations = true`
 
-1. Navigate to the URL above
-2. Check the **Provisioning Status** section:
-   * If **Status = "Provisioned"** → no action needed, skip this step
-   * If **Status = "Unprovisioned"** or **Job Status = "Failed"** → proceed to step 3
-   * If **Status = "In Progress"** → provisioning is already running, use "Refresh Status" button to check
-3. Click the **"Provision CMDB"** button
-4. The button becomes disabled and a **"Refresh Status"** button appears
-5. **Do NOT wait for completion** — provisioning runs in the background and can take several minutes
-6. The provisioning stages will update:
-   * Step 1: Licenses Applied → typically completes quickly
-   * Step 2: CMDB Services Enabled → may take several minutes
+**Deploy:** `settings/apply_settings.py <org-alias> plan|deploy|verify --features problem` (see "IT Service Core"). If selected together with Incident/Change, combined into one IncidentMgmt deploy automatically.
 
-**Expected result after clicking Provision CMDB:**
+**Permissions (RC-77):** `settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features problem` assigns ProblemManagerPSG, ProblemFulfillerPSG to the connected user (only when selected; absent PSGs skipped; rejections reported).
 
-* Job Status changes to "In Progress"
-* Step 1: Licenses Applied — ✅ Completed (may already be done from a previous attempt)
-* Step 2: CMDB Services Enabled — ⏳ Provisioning In Progress
-* "Provision CMDB" button becomes disabled
-* "Refresh Status" button appears to poll for completion
+**Dependencies:** Incident Management must be enabled first.
 
-**Known issue:** Provisioning can fail at Step 2 ("CMDB Services Enabled"). If this happens:
+---
 
-* The page shows "Provisioning Failed" with message "This step couldn't be completed. Retry provisioning."
-* The "Provision CMDB" button reappears — click it to retry
-* Step 1 (Licenses Applied) typically stays completed across retries — only Step 2 re-runs
+## Phase 1c: Change Management (formerly Phase 6)
 
-**Post-provisioning — Step 3b: Turn on CMDB Feature**
+**Purpose:** Enable ITSM Change Management.
 
-After CMDB provisioning completes (Status = "Provisioned"), you must also enable the CMDB feature via the Salesforce Go setup page:
+**Check (Tooling API):**
 
-**URL:** `/lightning/setup/page/feature/service-cloud-itsm-cmdb-integration/home?topic=SalesforceGo`
+```
+SELECT Metadata FROM IncidentMgmtSettings LIMIT 1
+```
 
-**Page verification:** Breadcrumb should show **"Salesforce Go > Configuration Management Database (CMDB)"**. Header: **"Configuration Management Database (CMDB)"**.
+Verify: `enableITSMChangeMgmt = true`, `enableRiskAssessment = true`
 
-**Interaction flow:**
+**Deploy:** `settings/apply_settings.py <org-alias> plan|deploy|verify --features change` (see "IT Service Core"). If selected together with Incident/Problem, combined into one IncidentMgmt deploy automatically.
 
-**Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
+**Optional flags (enabled unless --required-only):** enableChgRqstCnflctDetection + the 4 conflict checks, enableChangeRequestValidations, Change priority matrix/override
 
-1. Navigate to the URL above
-2. If the page shows a **"Get Started"** button → click it. This transforms the page to show the enable toggle.
-3. After clicking "Get Started", a **"Turn on Configuration Management Database (CMDB)"** section appears with an Enable/Disable toggle
-4. Click the **Enable/Disable Feature** toggle
-5. A confirmation dialog appears: **"Turn on Configuration Management Database (CMDB)?"**
-   * Message: "It takes a few minutes to turn on this feature for you."
-6. Click **"Confirm"**
-7. The toggle becomes checked — feature is now enabled
+**Permissions (RC-77):** `settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features change` assigns ChangeRequestManagerPSG, ChangeRequestFulfillerPSG to the connected user (only when selected; absent PSGs skipped; rejections reported).
 
-**Execution order note:** Since CMDB provisioning takes several minutes, the recommended flow is:
+**Dependencies:** Incident Management must be enabled first.
 
-1. Start CMDB provisioning (Step 3 — click "Provision CMDB")
-2. Move on to other browser steps (Enhanced Chat, Assignment Rules, etc.)
-3. Come back to check provisioning status
-4. Once provisioned, navigate to the CMDB integration page (Step 3b) and turn it on
+---
 
-**Post-enablement:** The CMDB permission sets (`ItSrvcCnfgItmOwnerPermissionSet`, `ItSrvcCnfgItmReadPermissionSet`, `ItSrvcCnfgItmTypManagerPermissionSet`, `ItSrvcCnfgItmTypReadPermissionSet`) can be assigned to users.
+## Phase 1d: Release Management (formerly Phase 7)
 
-### Step 3c: Verify Enhanced Chat Messaging Channel
+**Purpose:** Enable ITSM Release Management.
 
-**Purpose:** After Enhanced Chat provisioning completes (Step 2), verify the MessagingChannel was created correctly and User Verification is enabled on the Embedded Messaging configuration.
+**Deploy (Level 1 — programmatic, XML process):** Phase 1d runs `settings/apply_settings.py <ORG> plan --features release` → user approval → `deploy --features release --confirm` → verify. Spec section `ReleaseMgmt` sets `enableITSMReleaseMgmt` (required), `enableReleaseValidations` and `enableReleaseEventCreation` to true. Prerequisite: Change Management ON (Phase 1c, selected or already ON). Replaces the 'direct deploy without reading first' and SOAP read workaround (RC-12).
 
-**Prerequisites:** Step 2 (Set Up Enhanced Chat for IT Service Employee) must have completed provisioning (not just confirmed — the background provisioning must finish).
+1. `python3 settings/apply_settings.py <org-alias> plan --features release` — fresh retrieve + diff (no org change)
+2. `python3 settings/apply_settings.py <org-alias> deploy --features release --confirm` — only after the user approves the plan (once per run)
+3. `python3 settings/apply_settings.py <org-alias> verify --features release`
 
-**Verification flow:**
+Same approval, deploy-cap, logging and exit-code rules as Phase 1a.
 
-**Scope: This is a VERIFICATION step — read and observe only. Do not enable, toggle, or click any features unless explicitly instructed below.**
+**Check (RC-50):** read ReleaseMgmt via metadata retrieve (`settings/apply_settings.py <org-alias> status --features release`); never infer from PSG presence — Release Management can be OFF on template orgs even when the Release PSGs are assigned.
 
-1. **Query MessagingChannel to confirm creation:**
 
-   ```
-   SELECT Id, DeveloperName, MasterLabel, IsActive
-   FROM MessagingChannel
-   WHERE DeveloperName = 'ItEmpAgentChannel'
-   ```
+**Permissions (RC-77):** `settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features release` assigns ReleaseManagerPSG, ReleaseGroupPSG to the connected user (only when selected; absent PSGs skipped; rejections reported).
 
-   * **Expected result:** One record with `DeveloperName = 'ItEmpAgentChannel'`, `MasterLabel = 'IT Employee Agent Channel'`, `IsActive = true`
-   * If no record is found, Enhanced Chat provisioning has not completed yet — wait and retry
-   * Save the `Id` value for the next step
+**Dependencies:** Change Management must be enabled first.
 
-2. **Navigate to the Embedded Messaging setup page:**
+---
 
-   **URL:** `/lightning/setup/LiveMessageSetup/<MessagingChannelId>/view?lightning__channelType=EmbeddedMessaging`
+## Phase 1e: Notification Service [mandatory]
 
-   Replace `<MessagingChannelId>` with the Id from the query above (e.g. `0Mjxxxxxxxxxx`).
+**1e Notification Service** [mandatory — always runs] — settings file ServiceCloudNotificationOrchestrator: enableNotifications (core), enableEmailNotifications, enableInAppNotifications (all required). Slack and Teams channels are not managed (`manage="false"`, requires Slack / Microsoft Teams — out of the recipe's scope). Prerequisite Incident Management: if Incident is neither selected nor ON, 1e is skipped with a note (the run does not abort); if Incident fails in the same run, 1e is held back.
 
-3. **Verify channel configuration on the page:**
+`python3 settings/apply_settings.py <org-alias> plan|deploy --confirm|verify --features notify` (joins every run automatically: feature attribute `mandatory="true"`).
 
-   * **Channel Name:** "IT Employee Agent Channel"
-   * **Developer Name:** "ItEmpAgentChannel"
-   * **User Verification:** ✅ Checkbox "Add User Verification" should be **checked**
-   * **"End chat when session ends":** Should be **disabled** (this is automatically disabled when User Verification is on)
-   * **Flow Definition:** "Route Messages to IT Employee Agent For Enhanced Chat"
-   * **Fallback Queue:** "IT Employee Agent Messaging Queue"
-   * **Omni-Channel Routing:** Should be configured
+**Observed behavior on this org:** deploy Succeeded (3 flags); plan all = 0 changes.
 
-4. **If User Verification is NOT checked:**
+**Follow-on template deploy (RC-90, note):** the notification email templates are customer-customised, so the recipe does NOT create or fix them — out of scope. The recipe notes that enabling Notification Service may trigger a Salesforce follow-on template deploy whose result can differ; on it-service-cloud-bha853 it failed and 0 of 28 templates exist (left as is). The cancelled follow-on after 4b is recorded as an observation only.
 
-   * Click the "Add User Verification" checkbox to enable it
-   * Save the page if a save action is required
-   * Note: Enabling User Verification automatically disables "End chat when session ends"
+---
 
-**Expected result:**
+## Agentforce (Phases 3a–3e — feature-driven)
 
-* MessagingChannel exists with `IsActive = true`
-* User Verification is checked ✅
-* Channel is fully configured with routing flow and fallback queue
+**Agentforce** phases, shown with status and run only if selected: **3a Agentforce Platform** (AgentPlatform.enableAgentPlatform, EinsteinGpt.enableEinsteinGptPlatform + enableEinsteinGPTDeployPromptTemplatesAsActive; prompt template permission sets) — needs Phase 0. **3b IT Service Fulfiller agent** (enableItSrvcsFulfillerAgent; agent exists → create via wizard if missing; activate; Access Agents) — needs 3a + Incident. **3c IT Employee Assistant** (enableItSrvcsEmployeeAgent; Enhanced Chat; channel/queue/routing/flow checks; activate; Access Agents) — needs 3a. **3d Proactive Assistant** (master + 7 Incident + 6 Problem flags; Problem flags need Problem Management) — needs 3b. **3e Optional AI features** (Incident Triage agent, Employee agent setup, 4 Einstein assignment/creation flags, service plan quick action) — needs 3a. Optional: offered in the selection list but never run unless the user picks it (user 2026-10-30; left OFF on it-service-cloud-bha853). Data Library (Steps 11/12) stays with Data Cloud (last).
 
-**Troubleshooting:**
+`--features platform,fulfiller,employee,proactive,aiextras`; flags with `requiresFeature` (Problem flags of 3d/3e, Change flag of 3e) are "not applied" unless that feature is selected or ON. Not managed: enableSvcCtlgApexTemplate (Unified Catalog phase, later), enableCoexistFeature (purpose unclear).
 
-* If the MessagingChannel query returns no results, Enhanced Chat provisioning is still running — return to Step 2's page to check status
-* If `IsActive = false`, the channel was created but not activated — check the Embedded Messaging setup page for errors
-* If the Embedded Messaging setup page shows an error, verify that Omni-Channel was successfully provisioned as part of Step 2
+1. `python3 settings/apply_settings.py <org-alias> status --features platform,fulfiller,employee,proactive,aiextras` (read-only)
+2. `python3 settings/apply_settings.py <org-alias> plan --features <ids>` → user approval → `deploy --features <ids> --confirm` → `verify --features <ids>`
+3. `python3 checks/check_agents.py <org-alias> [--features platform,fulfiller,employee]` (read-only)
 
-### Step 6: Verify Agentforce IT Service Agent Templates
+**Agent checks (RC-72):** Run `checks/check_agents.py <ORG> [--features platform,fulfiller,employee]` (read-only). It discovers the agents (Fulfiller by template `…ITSrvcMgmtFulfiller`; Employee = the agent targeted by the routing flow `RouteMsgsItEmpAgent`), ignores any other agents, and reports PASS/FAIL with a fix hint for: prompt template permission sets (3a); Fulfiller exists / active / in Access Agents (3b); Enhanced Chat channel active, queue + routing config, queue objects, user is a direct member, routing flow active, Employee agent discovered / active / in Access Agents (3c); Access_Agents assigned. Fixes are applied only with user approval: programmatic where possible (activate, Access Agents, queue member), browser Level 2 for the Fulfiller wizard and Enhanced Chat setup.
 
-**Purpose:** After IT Service Employee (Step 2 / Enhanced Chat) and IT Service Fulfiller (Phase 12 programmatic enablement) features are turned on, verify that both have agents provisioned under "Build and Manage Agent". This determines whether additional browser steps are needed to create agents.
+**Agent names (RC-9):** the Employee agent = the agent the Enhanced Chat routing flow targets (discover; never hard-code). Other agents such as IT_Service_Employee may or may not exist on an org — ignore them (availability-driven, RC-44). Fulfiller name also discovered from the org. Below, `<FULFILLER_AGENT>` and `<EMPLOYEE_AGENT>` stand for the discovered DeveloperNames.
 
-> **⚡ Programmatic alternative (recommended):** This verification can be done entirely via SOQL without opening a browser:
->
-> ```
-> SELECT Id, DeveloperName, MasterLabel FROM BotDefinition
-> WHERE DeveloperName LIKE '%IT%' OR DeveloperName LIKE '%Fulfiller%' OR DeveloperName LIKE '%Employee%'
-> ```
->
-> If the query returns agents for both IT Employee and IT Fulfiller, skip the browser verification and proceed directly to Step 8 (activation). Only open the browser if the query returns no results or you need to debug missing agents.
+**Observed behavior on this org:** status = 3a–3d ON, 3e OFF (0/7, left OFF by user choice). `checks/check_agents.py` 14/14 PASS; ignored: IT_Service_Employee, Copilot_for_Salesforce. Employee agent = `ItEmployeeAssistant` (svc_emp_intelligence, Active, targeted by the routing flow); `IT_Service_Employee` (svc_itsm_intelligence, Inactive, unused).
+
+**Authoring path (RC-22):** the ITSM agents are legacy Bot/GenAi agents; AiAuthoringBundle (Agent Script) is not supported on this org — maintain them with the legacy path.
+
+### Phase 3a: Agentforce Platform (formerly Phase 12)
+
+AgentPlatform.enableAgentPlatform, EinsteinGpt.enableEinsteinGptPlatform + enableEinsteinGPTDeployPromptTemplatesAsActive via the settings script (`--features platform`) — needs Phase 0. Prompt template permission sets (EinsteinGPTPromptTemplateUser, EinsteinGPTPromptTemplateManager) are assigned to the connected user with `settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features platform` (RC-91) and checked by `checks/check_agents.py`. AI Trust PII masking moved to 9c.
+
+### Phase 3b: IT Service Fulfiller agent
+
+enableItSrvcsFulfillerAgent (`--features fulfiller`); agent exists → create via wizard if missing; activate; Access Agents — needs 3a + Incident.
+
+#### Level 2 — create the Fulfiller via the wizard (formerly Step 7)
+
+**Purpose:** If `checks/check_agents.py` reports the Fulfiller missing (3b), create it with the Agentforce agent creation wizard — with user approval. The Employee agent is not created here: it is provisioned by Enhanced Chat (3c) and discovered from the routing flow (RC-9).
 
 **Prerequisites:**
 
-* Step 2 (Set Up Enhanced Chat for IT Service Employee) must have completed provisioning
-* IT Service Fulfiller must be turned on (done programmatically in Phase 12 via `enableItSrvcsFulfillerAgent` flag in `ServiceItsmIntelligenceUdd` settings)
-
-**URL (browser fallback):** `/lightning/setup/page/feature/service-cloud-agentforce-for-itsm/home?topic=SalesforceGo`
-
-**Page verification:** Breadcrumb should show **"Salesforce Go > Agentforce for IT Service"**. Header: **"Agentforce for IT Service"**.
-
-**What you'll see on the page:**
-
-* **Turn on Agentforce** section (should show "On" with ✅ for Agentforce Studio)
-* **Enable IT Service Agent Templates** section with three sub-features:
-  * **IT Service Employee** — toggle checked ✅, with progress indicator (e.g. "2 of 2 Steps Completed")
-  * **IT Service Fulfiller** — toggle checked ✅, with progress indicator (e.g. "1 of 3 Steps Completed" or "3 of 3 Steps Completed")
-  * **Set Up Enhanced Chat for IT Service Employee** — toggle checked ✅, with progress indicator
-
-**Verification flow:**
-
-**Scope: This is a VERIFICATION step — read and observe only. Do not enable, toggle, or click any features on this page. Only check status and note the results.**
-
-1. Navigate to the URL above
-
-2. **Verify IT Service Employee feature is turned on** — toggle should show checked ✅
-
-3. **Expand IT Service Employee** by clicking the "IT Service Employee" heading/button
-
-4. Look for the **"Build and Manage Agent"** sub-step:
-
-   * ✅ **Pass:** Shows **"1 active agent, 0 inactive agents"** or **"0 active agents, 1 inactive agent"** — at least one agent exists
-   * ❌ **Fail:** Shows **"0 agents"** — agent needs to be created (requires additional browser steps)
-
-5. Note the copilot builder link URL if present (e.g. `/AiCopilot/copilotStudio.app#/copilot/builder?copilotId=...`) — this will be used later for agent configuration
-
-6. **Verify IT Service Fulfiller feature is turned on** — toggle should show checked ✅
-
-7. **Expand IT Service Fulfiller** by clicking the "IT Service Fulfiller" heading/button
-
-8. Look for the **"Build and Manage Agent"** sub-step:
-
-   * ✅ **Pass:** Shows **"1 active agent, 0 inactive agents"** or **"0 active agents, 1 inactive agent"** — at least one agent exists
-   * ❌ **Fail:** Shows **"0 agents"** — agent needs to be created (requires additional browser steps)
-
-9. Note the wizard link URL if agent creation is needed (e.g. `/AiCopilot/copilotStudio.app#/copilot/wizard?mode=svc_itsm_intelligence__ITSrvcMgmtFulfiller`)
-
-**Decision point:**
-
-* **Both have agents** → Proceed to next steps (agent configuration, activation)
-* **IT Service Employee missing agent** → Additional browser steps needed to create the employee agent via the wizard link
-* **IT Service Fulfiller missing agent** → Additional browser steps needed to create the fulfiller agent via the wizard link (`/AiCopilot/copilotStudio.app#/copilot/wizard?mode=svc_itsm_intelligence__ITSrvcMgmtFulfiller`)
-* **Both missing agents** → Both agents need to be created through the wizard before proceeding
-
-**IT Service Fulfiller additional sub-steps (visible when expanded):** The Fulfiller section may show additional incomplete steps beyond "Build and Manage Agent":
-
-* **Configure Proactive Assistance** — checkbox (may be disabled until agent is created)
-* Other configuration steps depending on org state
-
-**Troubleshooting:**
-
-* If a feature toggle is not checked (turned off), it was not enabled programmatically — check Phase 12 deploy logs
-* If the page shows "0 agents" for IT Service Employee despite Enhanced Chat being enabled, the provisioning may still be in progress — wait a few minutes and refresh
-* If the "Build and Manage Agent" step shows "Step incomplete" with "0 agents", the agent template was not auto-provisioned and must be created manually through the wizard link
-
-### Step 7: Create Missing Agentforce IT Service Agents via Wizard
-
-**Purpose:** If Step 6 verification found that IT Service Employee or IT Service Fulfiller is missing an agent (shows "0 agents" under "Build and Manage Agent"), create the missing agent(s) using the Agentforce agent creation wizard.
-
-**Prerequisites:**
-
-* Step 6 verification completed — you know which agent(s) are missing
+* `checks/check_agents.py` run — the Fulfiller row FAILs (agent missing)
 * The corresponding feature must be turned on (toggle checked ✅) before the wizard link becomes available
 
 **Critical: Authentication requirement** The wizard runs inside the `/AiCopilot/copilotStudio.app` application which requires frontdoor URL authentication. **Direct navigation to the wizard URL will redirect to a login page.** You must:
@@ -1114,7 +550,6 @@ After CMDB provisioning completes (Status = "Provisioned"), you must also enable
 **Wizard URL patterns:**
 
 * **IT Service Fulfiller:** `/AiCopilot/copilotStudio.app#/copilot/wizard?mode=svc_itsm_intelligence__ITSrvcMgmtFulfiller`
-* **IT Service Employee:** `/AiCopilot/copilotStudio.app#/copilot/wizard?mode=svc_itsm_intelligence__ITSrvcMgmtEmployee` (pattern — confirm from the "Go" button link on the Agentforce for IT Service page)
 
 **Alternative entry point:** On the Agentforce for IT Service page, expand the feature section and click the **"Go"** button next to "Build and Manage Agent" — this links directly to the wizard URL.
 
@@ -1182,37 +617,18 @@ After CMDB provisioning completes (Status = "Provisioned"), you must also enable
 * **Agent created but not visible on IT Service page:** Refresh the Agentforce for IT Service page. The page may cache the previous state. Click "Sync Progress" button if available.
 * **Wizard shows different subagents than expected:** The available subagents depend on which features/licenses are provisioned in the org. The 4 listed above are the standard IT Service Fulfiller subagents.
 
-### Step 8: Activate Agentforce IT Service Agents (programmatic)
+#### Activate agents (programmatic fix, formerly Step 8)
 
-**Purpose:** Activate both IT Service agents (IT Employee Assistant and IT Service Fulfiller) so they are live and available.
+**Purpose:** Activate the discovered Fulfiller (3b) and Employee (3c) agents when `checks/check_agents.py` reports them inactive — with user approval.
 
 **This step is fully programmatic — no browser needed.**
 
 **Prerequisites:**
 
-* Step 6/7 completed — both agents exist (created via wizard or auto-provisioned)
+* Both agents exist (Fulfiller created via wizard if it was missing; Employee provisioned by Enhanced Chat)
 * Must run from a valid SFDX project directory (has `sfdx-project.json`), otherwise `sf agent activate` fails with `InvalidProjectWorkspaceError`
 
-**Agent API names:**
-
-| Agent Label | DeveloperName (API Name) | BotDefinition ID | |---|---|---| | IT Employee Assistant | `ItEmployeeAssistant` | (varies per org) | | IT Service Fulfiller | `IT_Service_Fulfiller` | (varies per org) |
-
-> **Note:** The discovery query may return additional agents beyond these two (e.g. `IT_Service_Employee`). These are auto-provisioned by other features and do not need to be activated or included in the Access Agents permission set unless specifically required. Focus on the two agents listed above.
-
-**Discovery — find the agent API names:** Query `BotDefinition` to find the IT Service agents:
-
-```
-SELECT Id, DeveloperName, MasterLabel FROM BotDefinition
-WHERE DeveloperName LIKE '%IT%' OR DeveloperName LIKE '%Fulfiller%' OR DeveloperName LIKE '%Employee%'
-```
-
-**Check current status:** Query `BotVersion` to see which agents are already active:
-
-```
-SELECT BotDefinition.DeveloperName, BotDefinition.MasterLabel, Status, VersionNumber
-FROM BotVersion
-WHERE BotDefinition.DeveloperName IN ('ItEmployeeAssistant','IT_Service_Fulfiller')
-```
+**Agent names:** discovered by `checks/check_agents.py` (RC-9) — never hard-coded. Below, `<FULFILLER_AGENT>` and `<EMPLOYEE_AGENT>` stand for the discovered DeveloperNames.
 
 **Activation command:**
 
@@ -1220,11 +636,11 @@ WHERE BotDefinition.DeveloperName IN ('ItEmployeeAssistant','IT_Service_Fulfille
 sf agent activate --api-name <DeveloperName> --target-org <ORG> --json
 ```
 
-Run this for each agent that has `Status = 'Inactive'`:
+Run this for each agent `checks/check_agents.py` reports inactive:
 
 ```
-sf agent activate --api-name ItEmployeeAssistant --target-org <ORG> --json
-sf agent activate --api-name IT_Service_Fulfiller --target-org <ORG> --json
+sf agent activate --api-name <EMPLOYEE_AGENT> --target-org <ORG> --json
+sf agent activate --api-name <FULFILLER_AGENT> --target-org <ORG> --json
 ```
 
 > **Note:** See Operational Learning #20 — this command requires a valid SFDX project directory.
@@ -1235,9 +651,9 @@ Expected success response:
 { "status": 0, "result": { "success": true, "version": 1 } }
 ```
 
-**Verification:** Re-query `BotVersion` to confirm both agents now show `Status = 'Active'`.
+**Verification:** re-run `checks/check_agents.py` (RC-72).
 
-**Observed behavior on this org:**
+**Observed behavior on this org** (Employee = `ItEmployeeAssistant`):
 
 * IT Employee Assistant was already active (auto-activated after Enhanced Chat provisioning)
 * IT Service Fulfiller was inactive after wizard creation — activated successfully via `sf agent activate`
@@ -1247,17 +663,17 @@ Expected success response:
 
 * **`InvalidProjectWorkspaceError`:** You're not in an SFDX project directory. Navigate to a directory with `sfdx-project.json` or create a minimal one.
 * **Agent already active:** `sf agent activate` on an already-active agent is a no-op — safe to run idempotently.
-* **Agent not found:** Verify the `DeveloperName` matches exactly (case-sensitive). Query `BotDefinition` to confirm.
+* **Agent not found:** Use the DeveloperName reported by `checks/check_agents.py` (case-sensitive).
 
-### Step 9: Create and Assign "Access Agents" Permission Set (programmatic)
+#### Access Agents permission set (programmatic fix, formerly Step 9)
 
-**Purpose:** Create a custom Permission Set that grants Agent Access for both IT Employee Assistant and IT Service Fulfiller agents, then assign it to the connected user.
+**Purpose:** If `checks/check_agents.py` reports an agent missing from Access Agents or Access_Agents unassigned, create/update the custom Permission Set that grants Agent Access to the discovered Fulfiller and Employee agents, then assign it to the connected user — with user approval.
 
 **This step is fully programmatic — no browser needed.**
 
 **Prerequisites:**
 
-* Step 8 completed — both agents are active
+* Both agents are active
 * Must run from a valid SFDX project directory
 
 **Permission Set XML:**
@@ -1268,14 +684,14 @@ Create file `force-app/main/default/permissionsets/Access_Agents.permissionset-m
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <agentAccesses>
-        <agentName>ItEmployeeAssistant</agentName>
+        <agentName><EMPLOYEE_AGENT></agentName>
         <enabled>true</enabled>
     </agentAccesses>
     <agentAccesses>
-        <agentName>IT_Service_Fulfiller</agentName>
+        <agentName><FULFILLER_AGENT></agentName>
         <enabled>true</enabled>
     </agentAccesses>
-    <description>Grants access to IT Employee Assistant and IT Service Fulfiller Agentforce agents</description>
+    <description>Grants access to the IT Employee Assistant and IT Service Fulfiller Agentforce agents</description>
     <hasActivationRequired>false</hasActivationRequired>
     <label>Access Agents</label>
 </PermissionSet>
@@ -1303,13 +719,7 @@ To assign to a specific user:
 sf org assign permset --name Access_Agents --onbehalfof user@example.com --target-org <ORG> --json
 ```
 
-**Verification:**
-
-```
-SELECT PermissionSet.Name, PermissionSet.Label, Assignee.Username
-FROM PermissionSetAssignment
-WHERE PermissionSet.Name = 'Access_Agents'
-```
+**Verification:** re-run `checks/check_agents.py` (RC-72).
 
 **Idempotency check:** Before creating, query whether it already exists:
 
@@ -1329,32 +739,268 @@ If it exists, skip creation and go straight to assignment. If already assigned, 
 **Troubleshooting:**
 
 * **Deploy queue contention:** First deploy attempt may get stuck/canceled. Retry — the second attempt usually succeeds immediately.
-* **Agent name mismatch:** The `agentName` values must match the `DeveloperName` from `BotDefinition` exactly. Query `BotDefinition` to confirm the correct names.
+* **Agent name mismatch:** The `agentName` values must match the DeveloperNames discovered by `checks/check_agents.py` exactly.
 * **Permission set already exists:** If deploying to an org that already has this permission set, the deploy will update it (not create a duplicate).
 * **Assignment failure — already assigned:** `sf org assign permset` fails if the user already has the permission set. This is safe to ignore.
 
-### Step 10: Self Service Portal — Create Experience Cloud Site with Agentic Center Template (programmatic)
+### Phase 3c: IT Employee Assistant (incl. Enhanced Chat)
 
-**Purpose:** Verify Self Service Portal is turned on and create an Experience Cloud site using the "Agentic Center" template to provide employees a self-service portal for IT incidents, cases, and service requests.
+enableItSrvcsEmployeeAgent (`--features employee`); Enhanced Chat; channel/queue/routing/flow checks; activate; Access Agents — needs 3a.
 
-**This step is fully programmatic — no browser needed.**
+Phase **3c** first runs `checks/check_agents.py <ORG> --features employee`. Its row 'Enhanced Chat set up (channel + queue/routing + flow)' PASSes only when the messaging channel ItEmpAgentChannel is active, the queue ItEmpAgentMsgQueue has a routing config, and the routing flow RouteMsgsItEmpAgent is active. Only if it FAILs (and with user approval): Level 2 browser on 'Agentforce for IT Service' → 'Enable IT Service Agent Templates' → toggle ONLY 'Set Up Enhanced Chat for IT Service Employee' (click the container around the switch, Learning #21) → Confirm. Do NOT touch the IT Service Employee / IT Service Fulfiller / Specialized templates toggles. Provisioning creates channel, queue, routing config, routing flow and the Embedded Service deployment + site in the background (a few minutes) — re-run the check until all rows PASS, then the Employee agent is discovered from the routing flow. No settings flag turns Enhanced Chat on (ServiceItsmIntelligenceUdd.enableItSrvcsEmpSetup is OFF on an org where Enhanced Chat is fully set up).
 
-**Prerequisites:**
+#### Level 2 reference — Enhanced Chat page (formerly Step 2)
 
-* Self Service Portal feature must be turned on (verify via browser at `/lightning/setup/page/feature/service-cloud-itsm-self-service-portal/home?topic=SalesforceGo`)
-* Digital Experiences must be enabled in the org
+**Purpose:** Enable Omni-Channel and Enhanced Chat for IT Service Employee agents. This turns on persistent messaging so Agentforce agents can answer employee questions for IT troubleshooting, service requests, and incident tracking.
 
-**Step 1 — Verify Self Service Portal is on:** Navigate (browser) to: `/lightning/setup/page/feature/service-cloud-itsm-self-service-portal/home?topic=SalesforceGo` Confirm "Turn on Self Service Portal" shows "On" with 100% progress.
+**URL:** `/lightning/setup/page/feature/service-cloud-agentforce-for-itsm/home?topic=SalesforceGo`
 
-**Step 2 — Check for existing sites:**
+**Page verification:** Breadcrumb should show **"Salesforce Go > Agentforce for IT Service"**. The page header should read **"Agentforce for IT Service"** with description "Empower employees to self-serve or create incidents with Agentforce..."
 
-```
-SELECT Id, Name, UrlPathPrefix, Status FROM Network ORDER BY Name
-```
+**What you'll see on the page:**
 
-Look for any site using an "Agentic Center" or "Agentforce Employee Center" template. If one already exists, skip site creation.
+* **Turn on Agentforce** section (should already show "On" with ✅ Success for Agentforce Studio)
+* **Enable IT Service Agent Templates** section with three sub-options:
+  * IT Service Employee (toggle) — ⛔ DO NOT TOUCH. Do not enable this toggle. It is NOT part of this recipe.
+  * IT Service Fulfiller (toggle — may already be checked ✅ from 3b) — ⛔ DO NOT TOUCH. Already handled programmatically in 3b.
+  * **Set Up Enhanced Chat for IT Service Employee** (toggle — ✅ this is the ONLY toggle to enable in this step)
+* **Enable Specialized IT Service Agent Templates** section (separate, below) — ⛔ DO NOT TOUCH. Do not enable any toggles in this section. It is NOT part of this recipe.
 
-**Step 3 — List available templates (Connect API via `sf api request rest`):**
+**Interaction flow:** see phase 3c above (RC-87) — toggle ONLY "Set Up Enhanced Chat for IT Service Employee", with user approval, and only if its check row FAILs.
+
+**Expected result after confirming:**
+
+* The toggle shows as checked/enabled
+* Background provisioning begins (Omni-Channel setup, messaging configuration)
+* The page may show progress indicators or sub-steps appearing under the section
+* A toast notification may appear confirming the feature was turned on
+
+**Troubleshooting:**
+
+* If the toggle doesn't respond to clicks, try clicking the **parent container element** (1-2 refs above the switch in the accessibility snapshot) rather than the switch element itself — see Operational Learning #21 about shadow DOM click interception on Lightning toggle components
+* If provisioning fails, return to the page later and look for a "Try Again" button (similar to Assignment Rules pattern)
+* This feature requires Agentforce to already be turned on (the "Turn on Agentforce" section must show "On")
+
+### Phase 3d: Proactive Assistant
+
+Master + 7 Incident + 6 Problem flags (`--features proactive`); Problem flags need Problem Management — needs 3b.
+
+### Phase 3e: Optional AI features [optional]
+
+Incident Triage agent, Employee agent setup, 4 Einstein assignment/creation flags, service plan quick action (`--features aiextras`) — needs 3a. Offered in the selection list but never run unless the user picks it; `--features all` excludes it (RC-74).
+
+---
+
+## Unified Catalog (Phases 4a–4c — feature-driven)
+
+**Unified Catalog** phases, run only if selected: **4a Context Service** (IndustriesContext.enableContextDefinitions; shared with Assignment Rules) — needs Phase 0. **4b Service catalog Apex templates** (ServiceItsmIntelligenceUdd.enableSvcCtlgApexTemplate) — needs 4a. **4c Unified Catalog permissions** — assign PSGs UnifiedCatalogAdminPsl, UnifiedCatalogAgentPsl, UnifiedCatalogCommunityUserPsl to the connected user with `settings/apply_permissions.py <ORG> plan|deploy --confirm|verify --features ucperms`; a PSG not in the org is skipped, an assignment the org rejects is reported (not fatal) — needs 4a. Release Management is NOT a prerequisite (removed; nothing in these settings depends on it). The recipe creates no catalog items.
+
+1. Settings (4a/4b): `python3 settings/apply_settings.py <org-alias> plan --features context,catalog` → user approval → `deploy --features context,catalog --confirm` → `verify`
+2. Permissions (4c): `python3 settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features ucperms`
+
+`plan/deploy --features all` (settings script) prints a NOTE that 4c is a permissions phase run by `apply_permissions.py`; PSG status is shown per row and a non-"Updated" PSG is warned about before assignment (RC-75).
+
+**Observed behavior on this org:** deployed 2026-10-30 with user approval — 4b Apex templates ON, 4c UnifiedCatalogAgentPsl assigned; verify OK, plan all = 0 changes.
+
+---
+
+## SLA Management (Phases 5a–5c)
+
+**5a Turn on SLA Management** — check: Entitlement settings `enableEntitlements` + `enableEntitlementVersioning` = true and the page section 'Turn on SLA Management for IT Service' = On (sub-steps Simplified SLA Setup + SLA Versioning). If off: Level 2 browser 'Turn On' → Confirm (Level 1 settings deploy is untested). **5b Predefined policies** — check: SlaProcess exists for Incident, Problem and ChangeRequest. If all exist → done; do NOT click 'Create' (the page checkbox can stay unchecked even when policies exist; Create is irreversible). If missing → ask the user, then browser Create for the missing objects only. **5c Milestones related list on record pages** — report only (manual, optional). Manage SLA Policies / Auto Entitlement Rules remain manual. The page badge 'In Progress' reflects optional items — not a failure.
+
+5c is an optional step, run only on user request.
+
+**Check (RC-78):** `checks/check_sla.py <ORG>` (read-only): 5a Entitlement settings; 5b SLA policy per Incident/Problem/ChangeRequest (never click 'Create' when all exist); 5c Milestones related list per record page — OPTIONAL (the Milestone Tracker component is a different thing and is reported as info).
+
+On template orgs the predefined SLA policies often already exist — check 5b before any browser action (RC-11).
+
+**Observed behavior on this org:** page On 100%; policies active for all three objects; the Create checkbox stays unchecked; Milestones related list absent on the record pages (5c not done; the Milestone Tracker component is present on all 5 pages).
+
+### Level 2 reference — SLA Management page (formerly Step 15)
+
+**Purpose:** Enable SLA Management for IT Service to define service-level agreements for Incident, Problem, and Change Request records. This turns on Simplified SLA Setup and SLA Versioning, and optionally creates predefined SLA policies.
+
+**This step requires browser.**
+
+**URL:** `/lightning/setup/page/feature/service-cloud-itsm-manage-sla-policies/home?topic=SalesforceGo`
+
+**Page verification:** Breadcrumb should show **"Salesforce Go > SLA Management for IT Service"**. Header: **"SLA Management for IT Service"** with description "Manage your service-level agreements to give your employees the level of support you've promised them and improve service reps efficiency."
+
+**Browser flow:**
+
+**Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
+
+**1. Check current state:**
+
+* If the page shows a **"Get Started"** button → click it to reveal the Turn On section
+* If the page already shows **"Turn on SLA Management for IT Service"** with **"On"** → SLA Management is already enabled, skip to step 3
+
+**2. Turn on SLA Management:**
+
+* The page shows **"Turn on SLA Management for IT Service"** section with a **"Turn On"** button
+* Two sub-steps are listed in Pending state:
+  * ⏳ Turn on Simplified SLA Setup
+  * ⏳ Turn on SLA Versioning
+* Click **"Turn On"**
+* A confirmation dialog appears: **"Turn on SLA Management for IT Service?"**
+  * Message: "It takes a few minutes to turn on this feature for you. When it's ready, you can configure settings and give users access."
+* Click **"Confirm"**
+* Both sub-steps should complete quickly:
+  * ✅ Turn on Simplified SLA Setup — Success
+  * ✅ Turn on SLA Versioning — Success
+  * Progress: 100%
+
+**3. (5b) Create Predefined Policies — only for objects without a policy:**
+
+⛔ **If `checks/check_sla.py` shows a policy for Incident, Problem and ChangeRequest, do NOT click "Create"** (RC-76) — the page checkbox can stay unchecked even when policies exist.
+
+⚠️ **ASK THE USER BEFORE THIS STEP — this action is IRREVERSIBLE.**
+
+> **⚡ Pre-check (see Operational Learning #18):** Before creating policies, query whether SLA policies already exist:
+>
+> ```
+> SELECT Id, Name, SobjectType FROM SlaProcess WHERE SobjectType IN ('Incident','Problem','ChangeRequest')
+> ```
+>
+> If policies already exist, show them to the user and confirm whether to proceed. Creating duplicates may cause confusion.
+
+The page shows a "Set Up the Basics" section with a **"Create Predefined Policies"** sub-step and a **"Create"** button. This creates 3 standard SLA policies (one each for Incident, Problem, and Change Request) without any actions configured. Once created, these policies cannot be removed.
+
+**If user approves:**
+
+* Click **"Create"** next to "Create Predefined Policies"
+* A dialog appears: **"Configure predefined SLA policies for the following objects:"**
+  * ☐ Incident
+  * ☐ Problem
+  * ☐ Change Request
+  * Warning: "You can't revert your selections when you save the changes"
+* Check all three checkboxes (click the labels, not the checkbox inputs directly — the checkbox is intercepted by its container)
+* The **"Save"** button becomes enabled once at least one checkbox is checked
+* Click **"Save"**
+* Both buttons (Cancel and Save) become disabled during processing
+* After processing completes, the dialog closes
+* The checkboxes will show as checked and disabled on subsequent opens (confirming creation)
+
+**If user declines:**
+
+* Skip this sub-step. Policies can be created manually later via the SLA Policies setup page.
+
+**Expected result after completion:**
+
+* **"Turn on SLA Management for IT Service"** shows **"On"** with Progress: 100%
+* Both automation sub-steps show ✅ Success
+* Remaining manual steps (Add Components to Lightning Pages, Manage SLA Policies, Manage Auto Entitlement Rules) are left for the user
+
+**Remaining manual configuration (not automated by recipe):**
+
+* **Add Components, Fields, and Actions to Lightning Record Pages** — Add the Milestones related lists to Incident record pages
+* **Manage SLA Policies and SLA Milestones** — Configure policies and milestones in Setup → SLA Policies
+* **Manage Auto Entitlement Rules** — Set up auto-apply rules so policies are automatically applied to records
+
+**Observed behavior on this org:**
+
+* Page initially showed "Get Started" button — clicked to reveal the Turn On section
+* SLA Management turned on successfully — both sub-steps completed immediately (Simplified SLA Setup ✅, SLA Versioning ✅)
+* Predefined Policies created for all 3 objects (Incident, Problem, Change Request) — user approved
+* On re-opening the Create dialog, all checkboxes showed as checked and disabled (confirming irreversibility)
+
+**Troubleshooting:**
+
+* **"Get Started" button doesn't appear:** The feature may already be turned on. Check if the page shows "On" status.
+* **Turn On fails:** Verify that Incident Management (Phase 1a) is enabled. SLA Management depends on ITSM features being active.
+* **Create Predefined Policies — Save button stays disabled:** At least one checkbox must be checked before Save becomes enabled.
+* **Checkbox click doesn't register:** Click the label text next to the checkbox rather than the checkbox input itself — the input element is intercepted by a container span.
+* **Dialog buttons disabled after Save:** This is normal — the system is processing. Wait for the dialog to close automatically.
+
+---
+
+## Assignment Rules (Phases 6a–6c)
+
+**6a Context Service** — same as 4a (IndustriesContext.enableContextDefinitions); not deployed twice. **6b Business rules engine permissions** — permission set licences BRERuntime + BREDesigner, then permission sets BRERuntime + BREDesigner, assigned to the connected user (licences first); via the permissions script with --confirm. **6c BRE Decision Table Access** — check: an active DecisionTable and the IT Service sample expression set (Sample_Assignment_Rule_for_Incident) exist; if not, Level 2 browser: Assignment Rules for IT Service page → 'Try Again'/'Turn On' → Confirm. No queryable setting exists for Decision Table Access, so the page is the fallback source of truth.
+
+1. 6a: `python3 settings/apply_settings.py <org-alias> plan|deploy --confirm|verify --features context` (same feature as 4a — skip if already ON)
+2. 6b: `python3 settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features bre` (licences → permission sets)
+3. Check: `python3 checks/check_assignment_rules.py <org-alias>` (read-only)
+
+**Permissions script (RC-80):** result file per mode — deploy → permissions-result.md, plan → permissions-plan.md, verify → permissions-verify.md (read-only checks such as check_assignment_rules.py call verify); `<ps requiresPsl="…">` is reported "not applied — licence … not assigned" and not attempted when its licence could not be assigned.
+
+**Observed behavior on this org:** 6a ON; 6b licences + permission sets assigned; 6c active decision table + Sample_Assignment_Rule_for_Incident present; page shows Turn on = On with both sub-steps Success.
+
+### Level 2 reference — Assignment Rules page (formerly Step 1, 6c fallback)
+
+**Purpose:** Enable Context Service and BRE Decision Table Access for IT Service assignment rules.
+
+> **⚡ Auto-complete behavior:** After 6a/4a deploys Context Service (`enableContextDefinitions`), the "Context Service" sub-step on this page auto-completes to ✅. Only "BRE Decision Table Access" typically requires manual action. If you visit this page after 6a and see all sub-steps showing ✅ Complete, **no action is needed** — skip this step entirely.
+
+**URL:** `/lightning/setup/page/feature/service-cloud-itsm-assignment-rules/home?topic=SalesforceGo`
+
+**Page verification:** The breadcrumb at top should show **"Salesforce Go > Assignment Rules for IT Service"**. If it does not, stop and verify you have the correct URL and org.
+
+**What you'll see:**
+
+* Header: "Assignment Rules for IT Service"
+* A "Turn on Assignment Rules for IT Service" card with sub-steps
+* Progress indicator showing completion status (e.g. "1 of 3 Steps Completed")
+
+**Sub-steps on the page:**
+
+1. **Turn on Assignment Rules** — Contains two sub-tasks:
+   * **Context Service** — May already show ✅ (auto-enabled by 6a/4a)
+   * **BRE Decision Table Access** — Must be enabled manually in Setup UI
+
+**Interaction flow:**
+
+**Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
+
+1. Navigate to the URL above
+2. Look for the "Turn on Assignment Rules for IT Service" section
+3. If status shows "Complete" for both Context Service and BRE Decision Table Access → no action needed
+4. If BRE Decision Table Access shows ⏳ Pending or ❌ Error:
+   * Look for a **"Try Again"** button on the page
+   * Click **"Try Again"**
+   * A confirmation dialog will appear asking to confirm the action
+   * Click **"Confirm"** in the dialog
+5. Wait for both sub-steps to show ✅ (typically completes within 5-10 seconds)
+
+**Expected result:**
+
+* Context Service: ✅ Success
+* BRE Decision Table Access: ✅ Success
+* Progress: 100% (or "Step Completed")
+* Toast notification: **"Assignment Rules for IT Service was turned on and is ready to configure"**
+
+**Troubleshooting:**
+
+* If "Try Again" doesn't appear, the page may show a **"Turn On"** button instead — click that
+* If the step fails repeatedly, verify that the Context Service PSL and BRE PSLs are assigned to the user (6b permissions)
+* If the page shows "Feature not available", the org may lack the required ITSM licenses
+
+---
+
+## Knowledge (Phases 7a–7b)
+
+**7a Knowledge settings** — spec section `Knowledge` (feature `knowledge`, core enableKnowledge): enableKnowledge, enableLightningKnowledge (required) + enableCreateEditOnArticlesTab, enableExternalMediaContent, enableKbStandardSharing, enableKnowledgeArticleTextHighlights, showArticleSummariesCustomerPortal, showArticleSummariesInternalApp, showValidationStatusField, votingEnabled (optional). Runs through the settings script: retrieve-patch-deploy keeps the nested `suggestedArticles` block exactly as retrieved, which removes the recipe's XML-structure failure risk (Learning #16). **7b Knowledge readiness check** (read-only): connected user has Knowledge User; Knowledge__kav has the ITSM fields Details, Issue, Resolution, Root Cause, Workaround (needed by the Data Library); record types; published article count. Fix with approval: set Knowledge User on the connected user. AI Knowledge creation stays with phase 1a (IncidentMgmt) and needs Knowledge ON.
+
+1. 7a: `python3 settings/apply_settings.py <org-alias> plan|deploy --confirm|verify --features knowledge`
+2. 7b: `python3 checks/check_knowledge.py <org-alias>` (read-only)
+
+**Observed behavior on this org:** all 10 Knowledge flags already true; Knowledge User true; 5 ITSM fields present; 8 published articles.
+
+---
+
+## Self-service portal (Phases 8a–8c)
+
+**8a Self Service Portal ON** — no queryable setting; confirm on the Salesforce Go page (read-only): 'Turn on Self Service Portal' = On. If off: browser Turn On → Confirm (user approval). **8b Portal site** — `checks/check_portal.py <ORG>` lists candidate sites by template (Connect API `templateName` = Agentic Center or Agentforce Employee Center; Embedded Service sites are chat deployments and excluded). Ask the user which existing site to use; create a new one (Connect API, name + URL suffix from the user) only if they choose to. Either template is valid — the Salesforce Go page recommends Agentforce Employee Center / Employee Portal, the original recipe used Agentic Center. **8c Published** — chosen site Live; publish only with user approval.
+
+The chosen site is the target for Embedded chat (phase 10).
+
+Check: `python3 checks/check_portal.py <org-alias> [--site "<site name>"]` (read-only).
+
+**Observed behavior on this org:** the user chose **ITSMPortal** (Agentic Center, Live, site root) as this org's portal; page On 100%; 8b/8c PASS.
+
+### Reference — create a new site (only if the user chooses; formerly Step 10)
+
+**Step 1 — List available templates (Connect API via `sf api request rest`):**
 
 ```
 sf api request rest '/services/data/v67.0/connect/communities/templates' --method get --target-org <ORG>
@@ -1364,7 +1010,7 @@ Verify `"Agentic Center"` is in the response. If not, inform the user and skip �
 
 > **⚠️ Use `sf api request rest`, NOT `curl`** — see Operational Learning #17. The `sf org display` command returns redacted access tokens that break `curl` calls. `sf api request rest` handles authentication automatically.
 
-**Step 4 — Create the site (Connect API via `sf api request rest`):**
+**Step 2 — Create the site (Connect API via `sf api request rest`):**
 
 ```
 sf api request rest '/services/data/v67.0/connect/communities' --method post --body '{"name":"<SITE_NAME>","urlPathPrefix":"<URL_SUFFIX>","templateName":"Agentic Center"}' --target-org <ORG>
@@ -1380,7 +1026,7 @@ The response includes a `jobId` for async tracking:
 }
 ```
 
-**Step 5 — Poll for completion:**
+**Step 3 — Poll for completion:**
 
 ```
 SELECT Id, Name, Status, Error FROM BackgroundOperation WHERE Id = '<jobId>'
@@ -1388,7 +1034,7 @@ SELECT Id, Name, Status, Error FROM BackgroundOperation WHERE Id = '<jobId>'
 
 Poll every 5-10 seconds until `Status = 'Complete'`. If `Error` is not null, the creation failed.
 
-**Step 6 — Verify site created:**
+**Step 4 — Verify site created:**
 
 ```
 SELECT Id, Name, UrlPathPrefix, Status FROM Network WHERE Name = '<SITE_NAME>'
@@ -1401,19 +1047,27 @@ Expected: Status = `UnderConstruction` (site is created but not yet published).
 1. **Portal name** (e.g. "Employee Service Portal")
 2. **URL suffix** (e.g. "helpdesk" → `https://<org>.my.site.com/helpdesk`)
 
-**Observed behavior on this org:**
-
-* Self Service Portal was turned on (1 of 2 steps completed — site creation was the missing step)
-* "Agentic Center" template was available in the templates list
-* Site creation via Connect API completed successfully in \~15 seconds
-* Site created with Status = "UnderConstruction" (needs publishing separately)
-
 **Troubleshooting:**
 
 * **Template not found:** The "Agentic Center" template may not be provisioned. Check if "Agentforce Employee Center" is available as an alternative. If neither exists, inform user and skip.
 * **URL suffix conflict:** If the URL path prefix is already in use by another site, creation will fail. Choose a different suffix.
 * **BackgroundOperation stuck in "Running":** Wait longer — site creation can take up to 60 seconds. If stuck >2 minutes, check for errors.
 * **Digital Experiences not enabled:** The Connect API will fail if Digital Experiences is not enabled in the org. Enable it first via Setup → Digital Experiences → Settings.
+
+---
+
+## Data Cloud (Phases 9a–9d — ALWAYS LAST)
+
+**9a Turn on Data Cloud** — settings spec feature `datacloud` (CustomerDataPlatform.enableCustomerDataPlatform), placed LAST in file order; plan → user approval → deploy --confirm. The deploy itself is quick; it then triggers a background 'Automated Process' InstalledPackage deploy (ssot, ~10–30 min). **Never cancel it.** Wait with read-only polling (DeployRequest by Automated Process; IsCustomerDataPlatformEnabled; ssot package) — nothing else may deploy meanwhile. **9b Data Cloud permissions** — GenieAdmin (and GenieUserEnhancedSecurity only if it exists after provisioning) to the connected user via the permissions script. **9c AI Trust PII masking** [optional] — EinsteinAI.enableTrustPIIMasking; run it in a LATER run, after Data Cloud provisioning has completed (if selected together with 9a on a fresh org it is held back as "prerequisite not ON", because provisioning is asynchronous). **9d Data Library** — runs only AFTER Data Cloud provisioning has completed, as a separate follow-up run (user 2026-11-02: "post the Data Cloud enablement we will ask the agent to do that"). Uses the existing browser steps unchanged (original Step 11 Create Data Library "ITSM Knowledge" and Step 12 Connect Data Library to Agents and Reactivate) — they are kept verbatim, no rewrite needed; agent names come from RC-9 discovery.
+
+1. 9a: `python3 settings/apply_settings.py <org-alias> plan --features datacloud` → user approval → `deploy --features datacloud --confirm`; then read-only polling until the Automated Process install finishes
+2. 9b: `python3 settings/apply_permissions.py <org-alias> plan|deploy --confirm|verify --features datacloud` — GenieAdmin (RC-91). **Manual (RC-91):** after Data Cloud provisioning completes, an admin assigns permission set "Data Cloud User Enhanced Security" in Setup → Permission Sets → Manage Assignments, to the users who need it (it does not exist before provisioning).
+3. 9c (optional, in a LATER run after provisioning has completed): `--features piimask`
+4. 9d: separate follow-up run after provisioning has completed — Level 2 browser steps below, each with user approval
+
+**Observed behavior on this org:** Data Cloud turned on 2026-11-02 (deploy 0AfgL00000cRYxOSAW Succeeded; enableCustomerDataPlatform false → true). Per Atlas's handoff, the Automated Process install was still in progress at that time — never cancel it. GenieUserEnhancedSecurity appeared after Data Cloud was enabled (RC-26 — Assign GenieUserEnhancedSecurity only if it exists after Data Cloud provisioning; otherwise log informational. → now the manual 9b step, RC-91).
+
+> **Run only after Data Cloud provisioning has completed, as a separate follow-up run.** Provisioned check: `SELECT IsCustomerDataPlatformEnabled FROM CustomerDataPlatformSettings` = true (RC-19). The two browser steps below are the original recipe text, kept verbatim; only the agent names use the RC-9 placeholders `<FULFILLER_AGENT>` / `<EMPLOYEE_AGENT>` (discovered by `checks/check_agents.py`).
 
 ### Step 11: Create Agentforce Data Library — ITSM Knowledge (browser — requires Data Cloud)
 
@@ -1505,21 +1159,21 @@ Or navigate to Setup → Data Cloud. If the section is absent or shows an enable
 
 **Repeat the following flow for EACH agent:**
 
-1. IT Employee Assistant (`ItEmployeeAssistant`)
-2. IT Service Fulfiller (`IT_Service_Fulfiller`)
+1. IT Employee Assistant (`<EMPLOYEE_AGENT>`)
+2. IT Service Fulfiller (`<FULFILLER_AGENT>`)
 
 ---
 
 **Agent Builder URLs:**
 
-* IT Employee Assistant: `/AiCopilot/copilotStudio.app#/copilot/builder?copilotId=<ItEmployeeAssistant_ID>`
-* IT Service Fulfiller: `/AiCopilot/copilotStudio.app#/copilot/builder?copilotId=<IT_Service_Fulfiller_ID>`
+* IT Employee Assistant: `/AiCopilot/copilotStudio.app#/copilot/builder?copilotId=<EMPLOYEE_AGENT_ID>`
+* IT Service Fulfiller: `/AiCopilot/copilotStudio.app#/copilot/builder?copilotId=<FULFILLER_AGENT_ID>`
 
 To find the copilot IDs:
 
 ```
 SELECT Id, DeveloperName, MasterLabel FROM BotDefinition
-WHERE DeveloperName IN ('ItEmployeeAssistant','IT_Service_Fulfiller')
+WHERE DeveloperName IN ('<EMPLOYEE_AGENT>','<FULFILLER_AGENT>')
 ```
 
 **Alternative entry point:** Setup → Agentforce Agents → click the agent name → click **"Open in Builder"** (top right)
@@ -1581,7 +1235,7 @@ WHERE DeveloperName IN ('ItEmployeeAssistant','IT_Service_Fulfiller')
 ```
 SELECT BotDefinition.DeveloperName, BotDefinition.MasterLabel, Status
 FROM BotVersion
-WHERE BotDefinition.DeveloperName IN ('ItEmployeeAssistant','IT_Service_Fulfiller')
+WHERE BotDefinition.DeveloperName IN ('<EMPLOYEE_AGENT>','<FULFILLER_AGENT>')
 ```
 
 Both should show `Status = 'Active'`.
@@ -1600,234 +1254,212 @@ Both should show `Status = 'Active'`.
 * **beforeunload dialog:** When navigating away from the Builder, accept the "Leave site?" dialog. This is standard Builder behavior and does not indicate unsaved changes if you already clicked Save.
 * **Agent stays inactive after activation:** Check for errors in the Builder. Some configuration issues can prevent activation. Review the agent's topics and actions for any warnings.
 
-### Step 13: Verify Enhanced Chat Configuration — Queue, Routing, and Flow (programmatic)
+---
 
-**Purpose:** The "Set Up Enhanced Chat for IT Service Employee" feature auto-provisions a queue, routing configuration, and a routing flow. This step verifies all three components exist and are correctly configured, and fixes any issues.
+## Embedded chat on the portal (Phases 10a–10c)
 
-**This step is fully programmatic.**
+**10a Deployment** — check EmbeddedServiceConfig (Tooling) for the Enhanced Chat deployment (here ItEmpAgentChannel: Web, EmbeddedMessaging, enabled). **10b Framing** — check SiteIframeWhiteListUrl on the deployment's ESW site includes the portal domain (`*.site.com` covers my.site.com portals); add it with user approval if missing. **10c Widget on the portal** — Aura sites (e.g. Agentic Center ITSMPortal): needs 'Enable ExperienceBundle Metadata API' (Digital Experiences > Settings) to read/patch the site's theme `embeddedMessagingConfig` / `embeddedMessagingEswLiveAgentDevName` / `embeddedMessagingSiteEndpoint`; otherwise Experience Builder (browser) → Settings → Embedded Messaging → select the deployment → Publish. LWR sites: head markup snippet from Setup > Embedded Service Deployments > Install Code Snippet. Publish the site after changes (with approval). Help article remains the reference: service.it_srvcs_embedded_msgng_manual_steps.
 
-**Prerequisites:**
+10a and 10b are checked programmatically; **10c is a MANUAL step** (help article). The target site is the portal chosen in 8b.
 
-* "Set Up Enhanced Chat for IT Service Employee" must have been enabled (from the Agentforce for IT Service page). If it failed or was not enabled, **skip this step entirely**.
+**Reference:** Salesforce Help — https://help.salesforce.com/s/articleView?id=service.it_srvcs_embedded_msgng_manual_steps.htm&type=5
+
+**Observed behavior on this org:** 10a PASS (ItEmpAgentChannel: Web, EmbeddedMessaging, enabled); 10b PASS (`*.site.com`); the user confirmed the widget is on ITSMPortal.
 
 ---
 
-**Verification 1 — Queue: ITEmpAgentMsgQueue**
+## CMDB & Service Graph (Phases 11a–11c)
 
-Query the queue:
+**11a** `checks/check_cmdb.py <ORG>` (read-only): CMDB objects (ConfigurationItem, Incident/Problem link objects) present, CMDB permission sets assigned to the connected user; configuration item count (info). **11b** provisioning — no setting exists; confirm on CMDBProvisionalSettings (Status Provisioned, both stages Completed); if not: browser 'Provision CMDB' with user approval, runs in the background, re-check later. **11c** CMDB feature — confirm on the Salesforce Go CMDB page ('Turn on CMDB' switch ON); if off: browser 'Get Started' (if shown) → toggle → Confirm with user approval. Other page items (base configuration, auto discovery, CI-to-Asset, CI workflows) are manual/optional and never clicked.
 
-```
-SELECT Id, Name, DeveloperName, QueueRoutingConfigId
-FROM Group
-WHERE Type = 'Queue' AND DeveloperName = 'ItEmpAgentMsgQueue'
-```
+Check: `python3 checks/check_cmdb.py <org-alias>` (read-only; 11b/11c need page confirmation).
 
-**Expected:**
+The CMDB permission sets only exist after CMDB provisioning, so they are checked in 11a, not in the Pre-flight audit — on fresh orgs they would show as false "missing" (RC-24; fresh-org rule, RC-30).
 
-* Name: `IT Employee Agent Messaging Queue`
-* DeveloperName: `ItEmpAgentMsgQueue`
-* QueueRoutingConfigId: should be populated (not null)
+**Observed behavior on this org:** Provisioned (Oct 16), both stages Completed; CMDB feature ON; auto-copy ON; 0 configuration items; 4 CMDB permission sets + 2 PSGs assigned (they already exist here because CMDB is provisioned — RC-30).
 
-**Check queue supported objects:**
+### Level 2 reference — provisioning and feature pages (formerly Steps 3/3b)
 
-```
-SELECT Id, SobjectType FROM QueueSobject WHERE QueueId = '<QueueId>'
-```
+**Purpose:** Provision CMDB (Configuration Management Database) and Service Graph to enable configuration item tracking for IT Service Management.
 
-Must include both:
+**URL:** `/lightning/setup/CMDBProvisionalSettings/home`
 
-* ✅ `MessagingEndUser` (Messaging User)
-* ✅ `MessagingSession`
+**Page verification:** The main content area should show **"CMDB and Service Graph Provisioning Settings"** with description "View the current provisioning status of CMDB and service graph, start or retry provisioning..."
 
-**Check queue members:**
+**What you'll see on the page:**
 
-```
-SELECT Id, UserOrGroupId FROM GroupMember WHERE GroupId = '<QueueId>'
-```
+* **Provisioning Status** card showing:
+  * Status: `Unprovisioned` / `Provisioned` / `In Progress`
+  * Last Run On / Last Run By / Job Status
+* **CMDB Provisioning** card with two provisioning stages:
+  * Step 1: Licenses Applied
+  * Step 2: CMDB Services Enabled
+* A **"Provision CMDB"** button (if not yet provisioned or if previous attempt failed)
 
-The connected user should be a member. If not, add them:
-
-```
-sf data create record --sobject GroupMember \
-  --values "GroupId=<QueueId> UserOrGroupId=<UserId>" \
-  --target-org <ORG>
-```
-
-Note: The auto-provisioning may add a Role group rather than the user directly. Adding the user as a direct member ensures they can receive routed messages.
-
----
-
-**Verification 2 — Routing Configuration: ItEmpAgentRoutingCnfg**
-
-Query the routing config (using the `QueueRoutingConfigId` from the queue):
-
-```
-SELECT Id, DeveloperName, MasterLabel, RoutingPriority, RoutingModel, CapacityPercentage
-FROM QueueRoutingConfig
-WHERE DeveloperName = 'ItEmpAgentRoutingCnfg'
-```
-
-**Expected values:** | Field | Expected Value | |---|---| | MasterLabel | IT Employee Agent Routing Configuration | | RoutingPriority | 1 | | RoutingModel | MostAvailable | | CapacityPercentage | 50 (or configured value) |
-
-**If routing config is missing**, create one:
-
-1. Navigate to Setup → Routing Configurations (browser)
-2. Click New
-3. Configure:
-   * Name: `IT Employee Agent Routing Configuration`
-   * Routing Priority: `1`
-   * Routing Model: `Most Available`
-   * Capacity Type: `Inherited`
-   * Units of Capacity: `10`
-4. Click Save
-5. Assign it to the queue by updating the queue's `QueueRoutingConfigId`
-
----
-
-**Verification 3 — Flow: RouteMsgsItEmpAgent**
-
-Query via Tooling API:
-
-```
-GET /services/data/v67.0/tooling/query?q=
-  SELECT Id, Definition.DeveloperName, MasterLabel, Status, VersionNumber
-  FROM Flow
-  WHERE Definition.DeveloperName='RouteMsgsItEmpAgent'
-  ORDER BY VersionNumber DESC LIMIT 5
-```
-
-**Expected:**
-
-* MasterLabel: `Route Messages to IT Employee Agent For Enhanced Chat`
-* Status: `Active`
-
-If the flow is missing or inactive, the Enhanced Chat setup did not complete successfully. The flow is auto-created by the setup wizard and cannot easily be recreated manually — re-run the Enhanced Chat setup from the Agentforce for IT Service page.
-
----
-
-**Observed behavior on this org:**
-
-* ✅ Queue `ItEmpAgentMsgQueue` exists with both `MessagingEndUser` and `MessagingSession` objects
-* ⚠️ Queue member was a Role group only — connected user was added as a direct member
-* ✅ Routing config `ItEmpAgentRoutingCnfg` exists with Priority=1, Model=MostAvailable, Capacity=50%
-* ✅ Routing config is assigned to the queue (`QueueRoutingConfigId` populated)
-* ✅ Flow `RouteMsgsItEmpAgent` exists and is Active (v1)
-
-**Troubleshooting:**
-
-* **Queue not found:** Enhanced Chat setup did not complete. Re-enable from the Agentforce for IT Service page.
-* **Queue missing objects:** Use browser to edit the queue and add `Messaging User` and `Messaging Session` as supported objects.
-* **Routing config not assigned to queue:** The queue's `QueueRoutingConfigId` is null. Edit the queue in Setup and select the routing configuration.
-* **Flow not found or inactive:** The routing flow is auto-provisioned. If missing, the Enhanced Chat setup must be re-run. If inactive, activate it via Setup → Flows.
-* **FlowDefinition SOQL not supported:** Use Tooling API (`/services/data/v67.0/tooling/query`) to query Flow/FlowDefinition instead of standard SOQL.
-
-### Step 14: Complete Embedded Messaging Setup for Employee Portal (manual)
-
-**Purpose:** Configure the Embedded Messaging deployment that connects the Experience Cloud site (Employee Service Portal) to the IT Employee Assistant agent via the Enhanced Chat channel. This enables the chat widget on the portal.
-
-**This step is MANUAL — too many org-specific variables for automation.**
-
-This step involves configuring Embedded Service Deployments, messaging channels, and linking them to the Experience Cloud site. The configuration depends on the specific site name, URL, messaging channel IDs, and other org-specific values that vary between environments.
-
-**Reference:** Follow the Salesforce Help article for complete instructions: https://help.salesforce.com/s/articleView?id=service.it_srvcs_embedded_msgng_manual_steps.htm&type=5
-
-**Prerequisites:**
-
-* Step 10 completed — Experience Cloud site created (e.g. "Employee Service Portal" at `/helpdesk`)
-* Step 13 completed — Enhanced Chat queue, routing config, and flow verified
-* Both IT Service agents are active (Step 8)
-
-### Step 15: SLA Management for IT Service (browser)
-
-**Purpose:** Enable SLA Management for IT Service to define service-level agreements for Incident, Problem, and Change Request records. This turns on Simplified SLA Setup and SLA Versioning, and optionally creates predefined SLA policies.
-
-**This step requires browser.**
-
-**URL:** `/lightning/setup/page/feature/service-cloud-itsm-manage-sla-policies/home?topic=SalesforceGo`
-
-**Page verification:** Breadcrumb should show **"Salesforce Go > SLA Management for IT Service"**. Header: **"SLA Management for IT Service"** with description "Manage your service-level agreements to give your employees the level of support you've promised them and improve service reps efficiency."
-
-**Browser flow:**
+**Interaction flow:**
 
 **Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
 
-**1. Check current state:**
+1. Navigate to the URL above
+2. Check the **Provisioning Status** section:
+   * If **Status = "Provisioned"** → no action needed, skip this step
+   * If **Status = "Unprovisioned"** or **Job Status = "Failed"** → proceed to step 3
+   * If **Status = "In Progress"** → provisioning is already running, use "Refresh Status" button to check
+3. Click the **"Provision CMDB"** button
+4. The button becomes disabled and a **"Refresh Status"** button appears
+5. **Do NOT wait for completion** — provisioning runs in the background and can take several minutes
+6. The provisioning stages will update:
+   * Step 1: Licenses Applied → typically completes quickly
+   * Step 2: CMDB Services Enabled → may take several minutes
 
-* If the page shows a **"Get Started"** button → click it to reveal the Turn On section
-* If the page already shows **"Turn on SLA Management for IT Service"** with **"On"** → SLA Management is already enabled, skip to step 3
+**Expected result after clicking Provision CMDB:**
 
-**2. Turn on SLA Management:**
+* Job Status changes to "In Progress"
+* Step 1: Licenses Applied — ✅ Completed (may already be done from a previous attempt)
+* Step 2: CMDB Services Enabled — ⏳ Provisioning In Progress
+* "Provision CMDB" button becomes disabled
+* "Refresh Status" button appears to poll for completion
 
-* The page shows **"Turn on SLA Management for IT Service"** section with a **"Turn On"** button
-* Two sub-steps are listed in Pending state:
-  * ⏳ Turn on Simplified SLA Setup
-  * ⏳ Turn on SLA Versioning
-* Click **"Turn On"**
-* A confirmation dialog appears: **"Turn on SLA Management for IT Service?"**
-  * Message: "It takes a few minutes to turn on this feature for you. When it's ready, you can configure settings and give users access."
-* Click **"Confirm"**
-* Both sub-steps should complete quickly:
-  * ✅ Turn on Simplified SLA Setup — Success
-  * ✅ Turn on SLA Versioning — Success
-  * Progress: 100%
+**Known issue:** Provisioning can fail at Step 2 ("CMDB Services Enabled"). If this happens:
 
-**3. (Optional) Create Predefined Policies:**
+* The page shows "Provisioning Failed" with message "This step couldn't be completed. Retry provisioning."
+* The "Provision CMDB" button reappears — click it to retry
+* Step 1 (Licenses Applied) typically stays completed across retries — only Step 2 re-runs
 
-⚠️ **ASK THE USER BEFORE THIS STEP — this action is IRREVERSIBLE.**
+**Post-provisioning — 11c: Turn on CMDB Feature**
 
-> **⚡ Pre-check (see Operational Learning #18):** Before creating policies, query whether SLA policies already exist:
->
-> ```
-> SELECT Id, Name, SobjectType FROM SlaProcess WHERE SobjectType IN ('Incident','Problem','ChangeRequest')
-> ```
->
-> If policies already exist, show them to the user and confirm whether to proceed. Creating duplicates may cause confusion.
+After CMDB provisioning completes (Status = "Provisioned"), you must also enable the CMDB feature via the Salesforce Go setup page:
 
-The page shows a "Set Up the Basics" section with a **"Create Predefined Policies"** sub-step and a **"Create"** button. This creates 3 standard SLA policies (one each for Incident, Problem, and Change Request) without any actions configured. Once created, these policies cannot be removed.
+**URL:** `/lightning/setup/page/feature/service-cloud-itsm-cmdb-integration/home?topic=SalesforceGo`
 
-**If user approves:**
+**Page verification:** Breadcrumb should show **"Salesforce Go > Configuration Management Database (CMDB)"**. Header: **"Configuration Management Database (CMDB)"**.
 
-* Click **"Create"** next to "Create Predefined Policies"
-* A dialog appears: **"Configure predefined SLA policies for the following objects:"**
-  * ☐ Incident
-  * ☐ Problem
-  * ☐ Change Request
-  * Warning: "You can't revert your selections when you save the changes"
-* Check all three checkboxes (click the labels, not the checkbox inputs directly — the checkbox is intercepted by its container)
-* The **"Save"** button becomes enabled once at least one checkbox is checked
-* Click **"Save"**
-* Both buttons (Cancel and Save) become disabled during processing
-* After processing completes, the dialog closes
-* The checkboxes will show as checked and disabled on subsequent opens (confirming creation)
+**Interaction flow:**
 
-**If user declines:**
+**Scope: ONLY perform the actions listed below. Do not interact with any other toggles, buttons, or sections on this page.**
 
-* Skip this sub-step. Policies can be created manually later via the SLA Policies setup page.
+1. Navigate to the URL above
+2. If the page shows a **"Get Started"** button → click it. This transforms the page to show the enable toggle.
+3. After clicking "Get Started", a **"Turn on Configuration Management Database (CMDB)"** section appears with an Enable/Disable toggle
+4. Click the **Enable/Disable Feature** toggle
+5. A confirmation dialog appears: **"Turn on Configuration Management Database (CMDB)?"**
+   * Message: "It takes a few minutes to turn on this feature for you."
+6. Click **"Confirm"**
+7. The toggle becomes checked — feature is now enabled
 
-**Expected result after completion:**
+**Execution order note:** Since CMDB provisioning takes several minutes, the recommended flow is:
 
-* **"Turn on SLA Management for IT Service"** shows **"On"** with Progress: 100%
-* Both automation sub-steps show ✅ Success
-* Page shows "1 of 5 Steps Completed" for the automated section
-* Remaining manual steps (Add Components to Lightning Pages, Manage SLA Policies, Manage Auto Entitlement Rules) are left for the user
+1. Start CMDB provisioning (11b — click "Provision CMDB", with user approval)
+2. Move on to other phases
+3. Come back to check provisioning status
+4. Once provisioned, navigate to the CMDB integration page (11c) and turn it on (with user approval)
 
-**Remaining manual configuration (not automated by recipe):**
+**Post-enablement:** The CMDB permission sets (`ItSrvcCnfgItmOwnerPermissionSet`, `ItSrvcCnfgItmReadPermissionSet`, `ItSrvcCnfgItmTypManagerPermissionSet`, `ItSrvcCnfgItmTypReadPermissionSet`) can be assigned to users.
 
-* **Add Components, Fields, and Actions to Lightning Record Pages** — Add the Milestones related lists to Incident record pages
-* **Manage SLA Policies and SLA Milestones** — Configure policies and milestones in Setup → SLA Policies
-* **Manage Auto Entitlement Rules** — Set up auto-apply rules so policies are automatically applied to records
+---
 
-**Observed behavior on this org:**
+## Permission Set Assignment Pattern
 
-* Page initially showed "Get Started" button — clicked to reveal the Turn On section
-* SLA Management turned on successfully — both sub-steps completed immediately (Simplified SLA Setup ✅, SLA Versioning ✅)
-* Predefined Policies created for all 3 objects (Incident, Problem, Change Request) — user approved
-* On re-opening the Create dialog, all checkboxes showed as checked and disabled (confirming irreversibility)
+Each feature phase lists its permission set groups in the spec (`<permissions feature=…>`): Incident (IncidentManagerPSG, IncidentFulfillerPSG, MajorIncidentManagerPSG), Problem (ProblemManagerPSG, ProblemFulfillerPSG), Change (ChangeRequestManagerPSG, ChangeRequestFulfillerPSG), Release (ReleaseManagerPSG, ReleaseGroupPSG), Unified Catalog 4c (3 UC PSGs). They are assigned to the connected user with `settings/apply_permissions.py <ORG> plan|deploy --confirm|verify --features <ids>` — only for selected phases; absent PSGs skipped; rejections reported. No additional PSGs (e.g. ItsmPortalUserPSG, EmployeeHub*, SetupWithAgentforceUserPsg) are audited or assigned.
 
-**Troubleshooting:**
+**Other permissions are handled in their phases:** prompt template permission sets (3a — permissions script `--features platform`, RC-91), Access Agents (3b/3c), BRE licences + permission sets (6b — permissions script, licences first), Knowledge User (7b fix with approval), Data Cloud GenieAdmin (9b — permissions script `--features datacloud`) and "Data Cloud User Enhanced Security" (9b — manual, after provisioning; RC-91), CMDB permission sets (checked in 11a).
 
-* **"Get Started" button doesn't appear:** The feature may already be turned on. Check if the page shows "On" status.
-* **Turn On fails:** Verify that Incident Management (Phase 3) is enabled. SLA Management depends on ITSM features being active.
-* **Create Predefined Policies — Save button stays disabled:** At least one checkbox must be checked before Save becomes enabled.
-* **Checkbox click doesn't register:** Click the label text next to the checkbox rather than the checkbox input itself — the input element is intercepted by a container span.
-* **Dialog buttons disabled after Save:** This is normal — the system is processing. Wait for the dialog to close automatically.
+> **PSG auto-assignment:** When a PSG is assigned, Salesforce automatically assigns all its contained Permission Sets and their required Permission Set Licenses. See Operational Learning #15.
+
+**Known user license incompatibilities (informational, not errors):**
+
+* `UnifiedCatalogCommunityUserPsl` — may fail for System Administrator users depending on licensing — treat failure as informational (RC-27)
+
+---
+
+## Deployment Helper Pattern
+
+All settings deployments use the `--metadata-dir` approach:
+
+1. Create temp directory with:
+
+   ```
+   /tmp/deploy-<name>/
+   ├── settings/
+   │   └── <SettingName>.settings    (the XML body)
+   └── package.xml                   (references the settings member)
+   ```
+
+2. Package.xml template:
+
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <Package xmlns="http://soap.sforce.com/2006/04/metadata">
+       <types>
+           <members>SETTING_MEMBER_NAME</members>
+           <name>Settings</name>
+       </types>
+       <version>67.0</version>
+   </Package>
+   ```
+
+3. **Always use `--async`** to submit the deploy, then poll with `deploy report`:
+
+   * Submit: `sf project deploy start --metadata-dir <dir> --target-org <ORG> --async`
+   * Poll: `sf project deploy report --job-id <id> --target-org <ORG>`
+   * Check for `"status": "Succeeded"` or `"status": "Failed"` in JSON response
+
+4. **Queue contention handling:**
+
+   * Salesforce processes one deploy at a time per org
+   * If your own deploy sits in `Pending` status for >2 minutes, cancel it (`sf project deploy cancel --job-id <id>`) and resubmit — check `DeployRequest.CreatedBy` first; never cancel a deploy created by Automated Process (RC-14)
+   * **Batch multiple settings** into a single deploy where possible (the settings script combines selected features that share a settings file)
+   * Allow 15-30 seconds between polls
+
+5. **Multiple settings in one deploy:** Add multiple `<members>` entries to the same package.xml and include all settings files in the `settings/` directory.
+
+---
+
+## Execution Order & Dependencies
+
+```
+Pre-flight audit   read-only, every run → skip map → user selects phases
+Phase 0            IT Service Enablement GATE (must be ON before any other phase)
+Step 0             Sharing Settings (Level 1 programmatic, Level 2 fallback)
+1a–1e              IT Service Core: 1a Incident · 1b Problem (needs 1a) · 1c Change (needs 1a) · 1d Release (needs 1c) · 1e Notification Service (mandatory; needs 1a)
+3a–3e              Agentforce: 3a Platform · 3b Fulfiller (needs 3a + 1a) · 3c Employee Assistant (needs 3a) · 3d Proactive (needs 3b) · 3e optional (needs 3a)
+4a–4c              Unified Catalog: 4a Context Service · 4b Apex templates (needs 4a) · 4c permissions (needs 4a)
+5a–5c              SLA Management (5c optional)
+6a–6c              Assignment Rules: 6a = 4a · 6b BRE permissions · 6c Decision Table Access
+7a–7b              Knowledge (no Incident prerequisite; AI Knowledge creation in 1a needs 7a)
+8a–8c              Self-service portal
+9a–9d              Data Cloud — LAST programmatic deploy; never cancel the Automated Process install (9c optional)
+10a–10c            Embedded chat on the portal (10c manual)
+11a–11c            CMDB & Service Graph
+```
+
+The settings script deploys its files in spec order (Knowledge first, … CustomerDataPlatform last) and combines selected features that share a file into one deploy; prerequisites are enforced on what actually turned ON (see "Script rules" under IT Service Core).
+
+---
+
+## Error Handling
+
+* **Already enabled:** Always check status before deploying — skip if already complete
+* **Settings changes:** always via `settings/apply_settings.py <ORG> plan` → user approval → `deploy --confirm` → `verify` (RC-52/55).
+* **Provisioning delays:** Data Cloud (20-30 min) and Agentforce (up to 20 min) require polling
+* **Manual steps:** CMDB and BRE Decision Table Access cannot be automated — flag for user action
+* **Missing licenses:** If Permission Sets/PSGs don't exist, the org may lack required licenses — stop and inform user
+* **Deploy queue stuck:** If your own deploy stays in `Pending` for >2 minutes, cancel and resubmit — check `DeployRequest.CreatedBy` first; never cancel an Automated Process deploy (RC-14). Batch multiple settings into single deploys to reduce queue contention
+* **Settings reads:** use Metadata API retrieve via the settings script; do not use SOAP readMetadata or hand-cleaned tokens.
+* **User license incompatibilities:** `UnifiedCatalogCommunityUserPsl` may fail for System Administrator users depending on licensing — treat failure as informational (RC-27)
+
+---
+
+## Appendix — Proposed changes (pending approval)
+
+> Not applied to the body of this recipe. Copied verbatim from the run's recipe-changes log. Every item listed here is still **proposed** and needs user approval before it is applied; approved, rejected and superseded changes are recorded in CHANGELOG.md.
+
+#### RC-4 API name for Product Item Additional Transaction
+- **Type:** add
+- **Current text:** mapping `| Product Item Additional Transaction | n/a — verify in org |`; object absent from both queries.
+- **New text (proposed):** mapping `ProductItemTransaction (unverified — absent in reference org)`; add `'ProductItemTransaction'` to Phase 1 audit + Step 0 verification queries.
+- **Source:** Atlas inference — API name NOT verified (object absent on this org); flagged by Echo
+- **Status:** proposed (unverified)
+
+#### RC-41 Add Contact/Order (Account children) to Phase 1 audit + Step 0 verification queries as informational
+- **Type:** add · **Source:** RC-39 · **Status:** proposed
